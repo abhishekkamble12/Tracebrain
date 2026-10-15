@@ -1,0 +1,955 @@
+{
+ "payments/inc:001": {
+  "tenant": "payments",
+  "type": "timeout",
+  "service": "checkout",
+  "ts": 1785785905,
+  "culprit_deploy": "dep:0010",
+  "culprit_service": "redis-cart",
+  "cause_key": "connection_pool_exhaustion",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0011": "decoy_path",
+   "dep:0012": "decoy_newer"
+  }
+ },
+ "payments/inc:002": {
+  "tenant": "payments",
+  "type": "error_rate",
+  "service": "frontend",
+  "ts": 1785935031,
+  "culprit_deploy": "dep:0014",
+  "culprit_service": "currency",
+  "cause_key": "currency_conversion_bug",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [],
+  "decoys": {
+   "dep:0013": "decoy_path",
+   "dep:0015": "decoy_newer"
+  }
+ },
+ "payments/inc:003": {
+  "tenant": "payments",
+  "type": "latency",
+  "service": "checkout",
+  "ts": 1786119708,
+  "culprit_deploy": "dep:0025",
+  "culprit_service": "productcatalog",
+  "cause_key": "n_plus_one_query",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0022": "decoy_path",
+   "dep:0023": "decoy_newer",
+   "dep:0024": "decoy_path"
+  }
+ },
+ "payments/inc:004": {
+  "tenant": "payments",
+  "type": "crashloop",
+  "service": "payment",
+  "ts": 1786285683,
+  "culprit_deploy": "dep:0033",
+  "culprit_service": "payment",
+  "cause_key": "missing_env_var",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0031": "decoy_newer",
+   "dep:0032": "decoy_path",
+   "dep:0034": "decoy_path"
+  }
+ },
+ "payments/inc:005": {
+  "tenant": "payments",
+  "type": "oom",
+  "service": "recommendation",
+  "ts": 1786461128,
+  "culprit_deploy": "dep:0039",
+  "culprit_service": "recommendation",
+  "cause_key": "cache_size_flag",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0037": "decoy_path",
+   "dep:0038": "decoy_path",
+   "dep:0040": "decoy_newer"
+  }
+ },
+ "payments/inc:006": {
+  "tenant": "payments",
+  "type": "saturation",
+  "service": "shipping",
+  "ts": 1786635666,
+  "culprit_deploy": "dep:0046",
+  "culprit_service": "shipping",
+  "cause_key": "retry_storm",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0043": "decoy_newer",
+   "dep:0045": "decoy_path"
+  }
+ },
+ "payments/inc:007": {
+  "tenant": "payments",
+  "type": "timeout",
+  "service": "checkout",
+  "ts": 1786781012,
+  "culprit_deploy": "dep:0052",
+  "culprit_service": "redis-cart",
+  "cause_key": "connection_pool_exhaustion",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0048": "decoy_path",
+   "dep:0050": "decoy_newer"
+  }
+ },
+ "payments/inc:008": {
+  "tenant": "payments",
+  "type": "error_rate",
+  "service": "frontend",
+  "ts": 1786959213,
+  "culprit_deploy": "dep:0060",
+  "culprit_service": "currency",
+  "cause_key": "currency_conversion_bug",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [],
+  "decoys": {
+   "dep:0057": "decoy_newer",
+   "dep:0058": "decoy_path",
+   "dep:0059": "decoy_path"
+  }
+ },
+ "payments/inc:009": {
+  "tenant": "payments",
+  "type": "latency",
+  "service": "checkout",
+  "ts": 1787142646,
+  "culprit_deploy": "dep:0065",
+  "culprit_service": "productcatalog",
+  "cause_key": "n_plus_one_query",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0063": "decoy_path",
+   "dep:0064": "decoy_newer"
+  }
+ },
+ "payments/inc:010": {
+  "tenant": "payments",
+  "type": "crashloop",
+  "service": "payment",
+  "ts": 1787320854,
+  "culprit_deploy": "dep:0073",
+  "culprit_service": "payment",
+  "cause_key": "missing_env_var",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0070": "decoy_newer",
+   "dep:0071": "decoy_path",
+   "dep:0072": "decoy_path"
+  }
+ },
+ "payments/inc:011": {
+  "tenant": "payments",
+  "type": "oom",
+  "service": "recommendation",
+  "ts": 1787494236,
+  "culprit_deploy": "dep:0081",
+  "culprit_service": "recommendation",
+  "cause_key": "cache_size_flag",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0080": "decoy_newer",
+   "dep:0082": "decoy_path",
+   "dep:0083": "decoy_path"
+  }
+ },
+ "payments/inc:012": {
+  "tenant": "payments",
+  "type": "saturation",
+  "service": "shipping",
+  "ts": 1787655699,
+  "culprit_deploy": "dep:0088",
+  "culprit_service": "shipping",
+  "cause_key": "retry_storm",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0086": "decoy_newer",
+   "dep:0089": "decoy_path"
+  }
+ },
+ "payments/inc:013": {
+  "tenant": "payments",
+  "type": "timeout",
+  "service": "checkout",
+  "ts": 1787831867,
+  "culprit_deploy": "dep:0099",
+  "culprit_service": "redis-cart",
+  "cause_key": "connection_pool_exhaustion",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0096": "decoy_path",
+   "dep:0100": "decoy_newer"
+  }
+ },
+ "payments/inc:014": {
+  "tenant": "payments",
+  "type": "error_rate",
+  "service": "frontend",
+  "ts": 1788017874,
+  "culprit_deploy": "dep:0109",
+  "culprit_service": "currency-v2",
+  "cause_key": "currency_conversion_bug",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [],
+  "decoys": {
+   "dep:0107": "decoy_path",
+   "dep:0111": "decoy_newer",
+   "dep:0112": "decoy_path"
+  }
+ },
+ "payments/inc:015": {
+  "tenant": "payments",
+  "type": "latency",
+  "service": "checkout",
+  "ts": 1788191916,
+  "culprit_deploy": "dep:0118",
+  "culprit_service": "productcatalog",
+  "cause_key": "n_plus_one_query",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0117": "decoy_newer",
+   "dep:0119": "decoy_path"
+  }
+ },
+ "payments/inc:016": {
+  "tenant": "payments",
+  "type": "crashloop",
+  "service": "payment",
+  "ts": 1788349342,
+  "culprit_deploy": "dep:0124",
+  "culprit_service": "payment",
+  "cause_key": "missing_env_var",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0122": "decoy_newer",
+   "dep:0123": "decoy_path",
+   "dep:0125": "decoy_path"
+  }
+ },
+ "payments/inc:017": {
+  "tenant": "payments",
+  "type": "oom",
+  "service": "recommendation",
+  "ts": 1788513731,
+  "culprit_deploy": "dep:0132",
+  "culprit_service": "recommendation",
+  "cause_key": "cache_size_flag",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0129": "decoy_path",
+   "dep:0131": "decoy_newer"
+  }
+ },
+ "payments/inc:018": {
+  "tenant": "payments",
+  "type": "saturation",
+  "service": "shipping",
+  "ts": 1788692249,
+  "culprit_deploy": "dep:0140",
+  "culprit_service": "shipping",
+  "cause_key": "retry_storm",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0137": "decoy_path",
+   "dep:0139": "decoy_newer",
+   "dep:0141": "decoy_path"
+  }
+ },
+ "payments/inc:019": {
+  "tenant": "payments",
+  "type": "timeout",
+  "service": "checkout",
+  "ts": 1788880513,
+  "culprit_deploy": "dep:0148",
+  "culprit_service": "redis-cart",
+  "cause_key": "connection_pool_exhaustion",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0149": "decoy_path",
+   "dep:0150": "decoy_path",
+   "dep:0151": "decoy_newer"
+  }
+ },
+ "payments/inc:020": {
+  "tenant": "payments",
+  "type": "error_rate",
+  "service": "frontend",
+  "ts": 1789039657,
+  "culprit_deploy": "dep:0160",
+  "culprit_service": "currency-v2",
+  "cause_key": "currency_conversion_bug",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [],
+  "decoys": {
+   "dep:0157": "decoy_path",
+   "dep:0159": "decoy_newer",
+   "dep:0161": "decoy_path"
+  }
+ },
+ "payments/inc:021": {
+  "tenant": "payments",
+  "type": "latency",
+  "service": "checkout",
+  "ts": 1789226612,
+  "culprit_deploy": "dep:0169",
+  "culprit_service": "productcatalog",
+  "cause_key": "n_plus_one_query",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0167": "decoy_path",
+   "dep:0168": "decoy_path",
+   "dep:0170": "decoy_newer"
+  }
+ },
+ "payments/inc:022": {
+  "tenant": "payments",
+  "type": "crashloop",
+  "service": "payment",
+  "ts": 1789391398,
+  "culprit_deploy": "dep:0176",
+  "culprit_service": "payment",
+  "cause_key": "missing_env_var",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0175": "decoy_newer",
+   "dep:0178": "decoy_path"
+  }
+ },
+ "payments/inc:023": {
+  "tenant": "payments",
+  "type": "oom",
+  "service": "recommendation",
+  "ts": 1789577999,
+  "culprit_deploy": "dep:0183",
+  "culprit_service": "recommendation",
+  "cause_key": "cache_size_flag",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0181": "decoy_path",
+   "dep:0182": "decoy_newer"
+  }
+ },
+ "payments/inc:024": {
+  "tenant": "payments",
+  "type": "saturation",
+  "service": "shipping",
+  "ts": 1789748314,
+  "culprit_deploy": "dep:0192",
+  "culprit_service": "shipping",
+  "cause_key": "retry_storm",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0189": "decoy_path",
+   "dep:0190": "decoy_newer",
+   "dep:0191": "decoy_path"
+  }
+ },
+ "payments/inc:025": {
+  "tenant": "payments",
+  "type": "abstain",
+  "service": "ad",
+  "ts": 1790012999,
+  "culprit_deploy": null,
+  "culprit_service": null,
+  "cause_key": null,
+  "occurrence": 1,
+  "split": "test",
+  "blast_radius": [
+   "frontend",
+   "recommendation"
+  ],
+  "decoys": {}
+ },
+ "payments/inc:026": {
+  "tenant": "payments",
+  "type": "abstain",
+  "service": "email",
+  "ts": 1790263512,
+  "culprit_deploy": null,
+  "culprit_service": null,
+  "cause_key": null,
+  "occurrence": 1,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {}
+ },
+ "platform/inc:001": {
+  "tenant": "platform",
+  "type": "timeout",
+  "service": "checkout",
+  "ts": 1785765222,
+  "culprit_deploy": "dep:0007",
+  "culprit_service": "redis-cart",
+  "cause_key": "connection_pool_exhaustion",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0006": "decoy_newer",
+   "dep:0008": "decoy_path"
+  }
+ },
+ "platform/inc:002": {
+  "tenant": "platform",
+  "type": "error_rate",
+  "service": "frontend",
+  "ts": 1785922744,
+  "culprit_deploy": "dep:0016",
+  "culprit_service": "currency",
+  "cause_key": "currency_conversion_bug",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [],
+  "decoys": {
+   "dep:0012": "decoy_path",
+   "dep:0015": "decoy_path",
+   "dep:0017": "decoy_newer"
+  }
+ },
+ "platform/inc:003": {
+  "tenant": "platform",
+  "type": "latency",
+  "service": "checkout",
+  "ts": 1786130167,
+  "culprit_deploy": "dep:0027",
+  "culprit_service": "productcatalog",
+  "cause_key": "n_plus_one_query",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0023": "decoy_path",
+   "dep:0025": "decoy_newer"
+  }
+ },
+ "platform/inc:004": {
+  "tenant": "platform",
+  "type": "crashloop",
+  "service": "payment",
+  "ts": 1786272360,
+  "culprit_deploy": "dep:0034",
+  "culprit_service": "payment",
+  "cause_key": "missing_env_var",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0030": "decoy_path",
+   "dep:0031": "decoy_newer",
+   "dep:0033": "decoy_path"
+  }
+ },
+ "platform/inc:005": {
+  "tenant": "platform",
+  "type": "oom",
+  "service": "recommendation",
+  "ts": 1786458495,
+  "culprit_deploy": "dep:0041",
+  "culprit_service": "recommendation",
+  "cause_key": "cache_size_flag",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0039": "decoy_path",
+   "dep:0042": "decoy_newer"
+  }
+ },
+ "platform/inc:006": {
+  "tenant": "platform",
+  "type": "saturation",
+  "service": "shipping",
+  "ts": 1786636214,
+  "culprit_deploy": "dep:0049",
+  "culprit_service": "shipping",
+  "cause_key": "retry_storm",
+  "occurrence": 1,
+  "split": "seen",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0047": "decoy_newer",
+   "dep:0051": "decoy_path"
+  }
+ },
+ "platform/inc:007": {
+  "tenant": "platform",
+  "type": "timeout",
+  "service": "checkout",
+  "ts": 1786801680,
+  "culprit_deploy": "dep:0057",
+  "culprit_service": "redis-cart",
+  "cause_key": "connection_pool_exhaustion",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0055": "decoy_path",
+   "dep:0056": "decoy_newer",
+   "dep:0058": "decoy_path"
+  }
+ },
+ "platform/inc:008": {
+  "tenant": "platform",
+  "type": "error_rate",
+  "service": "frontend",
+  "ts": 1786988767,
+  "culprit_deploy": "dep:0067",
+  "culprit_service": "currency",
+  "cause_key": "currency_conversion_bug",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [],
+  "decoys": {
+   "dep:0064": "decoy_path",
+   "dep:0065": "decoy_path",
+   "dep:0066": "decoy_newer"
+  }
+ },
+ "platform/inc:009": {
+  "tenant": "platform",
+  "type": "latency",
+  "service": "checkout",
+  "ts": 1787148854,
+  "culprit_deploy": "dep:0073",
+  "culprit_service": "productcatalog",
+  "cause_key": "n_plus_one_query",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0071": "decoy_path",
+   "dep:0074": "decoy_newer"
+  }
+ },
+ "platform/inc:010": {
+  "tenant": "platform",
+  "type": "crashloop",
+  "service": "payment",
+  "ts": 1787340909,
+  "culprit_deploy": "dep:0082",
+  "culprit_service": "payment",
+  "cause_key": "missing_env_var",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0079": "decoy_path",
+   "dep:0081": "decoy_newer",
+   "dep:0083": "decoy_path"
+  }
+ },
+ "platform/inc:011": {
+  "tenant": "platform",
+  "type": "oom",
+  "service": "recommendation",
+  "ts": 1787502807,
+  "culprit_deploy": "dep:0091",
+  "culprit_service": "recommendation",
+  "cause_key": "cache_size_flag",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0086": "decoy_newer",
+   "dep:0087": "decoy_path",
+   "dep:0089": "decoy_path"
+  }
+ },
+ "platform/inc:012": {
+  "tenant": "platform",
+  "type": "saturation",
+  "service": "shipping",
+  "ts": 1787683519,
+  "culprit_deploy": "dep:0100",
+  "culprit_service": "shipping",
+  "cause_key": "retry_storm",
+  "occurrence": 2,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0099": "decoy_path",
+   "dep:0101": "decoy_newer"
+  }
+ },
+ "platform/inc:013": {
+  "tenant": "platform",
+  "type": "timeout",
+  "service": "checkout",
+  "ts": 1787819434,
+  "culprit_deploy": "dep:0107",
+  "culprit_service": "redis-cart",
+  "cause_key": "connection_pool_exhaustion",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0105": "decoy_newer",
+   "dep:0106": "decoy_path",
+   "dep:0109": "decoy_path"
+  }
+ },
+ "platform/inc:014": {
+  "tenant": "platform",
+  "type": "error_rate",
+  "service": "frontend",
+  "ts": 1788001694,
+  "culprit_deploy": "dep:0115",
+  "culprit_service": "currency-v2",
+  "cause_key": "currency_conversion_bug",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [],
+  "decoys": {
+   "dep:0116": "decoy_path",
+   "dep:0117": "decoy_newer"
+  }
+ },
+ "platform/inc:015": {
+  "tenant": "platform",
+  "type": "latency",
+  "service": "checkout",
+  "ts": 1788196473,
+  "culprit_deploy": "dep:0127",
+  "culprit_service": "productcatalog",
+  "cause_key": "n_plus_one_query",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0126": "decoy_path",
+   "dep:0128": "decoy_newer"
+  }
+ },
+ "platform/inc:016": {
+  "tenant": "platform",
+  "type": "crashloop",
+  "service": "payment",
+  "ts": 1788356708,
+  "culprit_deploy": "dep:0133",
+  "culprit_service": "payment",
+  "cause_key": "missing_env_var",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0132": "decoy_path",
+   "dep:0134": "decoy_path",
+   "dep:0135": "decoy_newer"
+  }
+ },
+ "platform/inc:017": {
+  "tenant": "platform",
+  "type": "oom",
+  "service": "recommendation",
+  "ts": 1788519381,
+  "culprit_deploy": "dep:0139",
+  "culprit_service": "recommendation",
+  "cause_key": "cache_size_flag",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0137": "decoy_path",
+   "dep:0138": "decoy_path",
+   "dep:0140": "decoy_newer"
+  }
+ },
+ "platform/inc:018": {
+  "tenant": "platform",
+  "type": "saturation",
+  "service": "shipping",
+  "ts": 1788696578,
+  "culprit_deploy": "dep:0146",
+  "culprit_service": "shipping",
+  "cause_key": "retry_storm",
+  "occurrence": 3,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0145": "decoy_path",
+   "dep:0147": "decoy_path",
+   "dep:0148": "decoy_newer"
+  }
+ },
+ "platform/inc:019": {
+  "tenant": "platform",
+  "type": "timeout",
+  "service": "checkout",
+  "ts": 1788872024,
+  "culprit_deploy": "dep:0156",
+  "culprit_service": "redis-cart",
+  "cause_key": "connection_pool_exhaustion",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0154": "decoy_newer",
+   "dep:0157": "decoy_path"
+  }
+ },
+ "platform/inc:020": {
+  "tenant": "platform",
+  "type": "error_rate",
+  "service": "frontend",
+  "ts": 1789047646,
+  "culprit_deploy": "dep:0163",
+  "culprit_service": "currency-v2",
+  "cause_key": "currency_conversion_bug",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [],
+  "decoys": {
+   "dep:0161": "decoy_path",
+   "dep:0162": "decoy_path",
+   "dep:0164": "decoy_newer"
+  }
+ },
+ "platform/inc:021": {
+  "tenant": "platform",
+  "type": "latency",
+  "service": "checkout",
+  "ts": 1789229298,
+  "culprit_deploy": "dep:0168",
+  "culprit_service": "productcatalog",
+  "cause_key": "n_plus_one_query",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0167": "decoy_newer",
+   "dep:0169": "decoy_path"
+  }
+ },
+ "platform/inc:022": {
+  "tenant": "platform",
+  "type": "crashloop",
+  "service": "payment",
+  "ts": 1789381307,
+  "culprit_deploy": "dep:0176",
+  "culprit_service": "payment",
+  "cause_key": "missing_env_var",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0174": "decoy_path",
+   "dep:0177": "decoy_path",
+   "dep:0178": "decoy_newer"
+  }
+ },
+ "platform/inc:023": {
+  "tenant": "platform",
+  "type": "oom",
+  "service": "recommendation",
+  "ts": 1789559878,
+  "culprit_deploy": "dep:0185",
+  "culprit_service": "recommendation",
+  "cause_key": "cache_size_flag",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0184": "decoy_path",
+   "dep:0186": "decoy_newer"
+  }
+ },
+ "platform/inc:024": {
+  "tenant": "platform",
+  "type": "saturation",
+  "service": "shipping",
+  "ts": 1789727828,
+  "culprit_deploy": "dep:0191",
+  "culprit_service": "shipping",
+  "cause_key": "retry_storm",
+  "occurrence": 4,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {
+   "dep:0190": "decoy_path",
+   "dep:0192": "decoy_newer"
+  }
+ },
+ "platform/inc:025": {
+  "tenant": "platform",
+  "type": "abstain",
+  "service": "ad",
+  "ts": 1789983176,
+  "culprit_deploy": null,
+  "culprit_service": null,
+  "cause_key": null,
+  "occurrence": 1,
+  "split": "test",
+  "blast_radius": [
+   "frontend",
+   "recommendation"
+  ],
+  "decoys": {}
+ },
+ "platform/inc:026": {
+  "tenant": "platform",
+  "type": "abstain",
+  "service": "email",
+  "ts": 1790273403,
+  "culprit_deploy": null,
+  "culprit_service": null,
+  "cause_key": null,
+  "occurrence": 1,
+  "split": "test",
+  "blast_radius": [
+   "checkout",
+   "frontend"
+  ],
+  "decoys": {}
+ }
+}

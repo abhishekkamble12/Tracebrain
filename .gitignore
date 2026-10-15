@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Tracebrain
+eval/.cache/
+node_modules/
+ui/dist/
+*.rdb

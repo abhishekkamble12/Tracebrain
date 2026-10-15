@@ -1,0 +1,35 @@
+[project]
+name = "tracebrain"
+version = "0.1.0"
+description = "Evidence-backed root-cause analysis across time, on a FalkorDB temporal graph"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "falkordb>=1.0",
+    "mcp>=1.2",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "sse-starlette>=2.1",
+    "python-dotenv>=1.0",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+    "openai>=3.31.0",
+]
+
+[project.optional-dependencies]
+# Local embeddings for vector recall + B1 baseline (pulls torch; install when needed).
+embed = ["sentence-transformers>=3.0"]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tracebrain"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
