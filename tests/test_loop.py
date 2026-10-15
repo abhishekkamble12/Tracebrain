@@ -80,7 +80,7 @@ def test_disallowed_and_bad_json_calls_are_errors_not_crashes(seeded):
 def test_validate_final_rejects_then_accepts(seeded):
     ctx, _, truth = seeded
     script = Script(reply(("submit", {"deploy": "dep:9999"})), reply(("submit", {"deploy": truth["culprit_deploy"]})))
-    check = lambda a: None if a["deploy"] == truth["culprit_deploy"] else "deploy not among retrieved suspects"
+    check = lambda a, run: None if a["deploy"] == truth["culprit_deploy"] else "deploy not among retrieved suspects"
     r = run(ctx, script, {"suspects"}, final_tool=FINAL, validate_final=check)
     assert r.final == {"deploy": truth["culprit_deploy"]} and r.turns == 2
     rejected = script.seen_messages[1][-1]

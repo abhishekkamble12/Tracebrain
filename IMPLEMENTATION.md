@@ -1,5 +1,20 @@
 # Tracebrain: Implementation Plan
 
+## Progress (updated Oct 15)
+| Done | Tasks | Notes |
+|---|---|---|
+| ✅ | T0.1-T0.7 | Scaffold, FalkorDB capability check, schema + queries, connectors + synthetic world + seed, tools + scoring, MCP server (2.x, context via request meta), agent loop |
+| ✅ | T1.1, T1.2, T1.4, T1.5, T1.5b, T1.6, T1.7, T1.7b, T1.7c | Episodic steps + NEXT chain, findings blackboard + HANDOFF, Triage/Investigator, evidence gate in `submit_hypotheses`, causes (entity resolution) + lessons + recall + progressive disclosure, orchestrator + state machine + abstention, curator review |
+| ✅ | T1.7d | Sandbox rollback check (`verification.py`): `Graph.copy` → mark rolled back → environment answers → `(Hypothesis)-[:VERIFIED_BY]->(Verification)` → `VERIFIED` state. Only the top hypothesis is checked, and the result never re-ranks |
+| ✅ | T1.8 | FastAPI (`tracebrain/api/main.py`) + SSE event bus with replay for late subscribers (`events.py`), alert webhook, as-of graph endpoint for the UI |
+| ✅ | resume | `orchestrator.run()` continues from the stored state; completed tool calls are replayed from `Step` nodes, not re-executed; `FAILED` is resumable; `POST .../resume` |
+| ⏳ | first real-LLM run | needs a key in `.env`: `uv run python -m tracebrain.agents.smoke --incident inc:001` |
+| ⬜ | Day 3: UI + eval (baselines, memory ON/OFF, failure suite), `make judge-check` | |
+
+**API (as built)**: `GET /health`, `GET /tenants`, `GET /tenants/{t}/incidents`, `POST /tenants/{t}/incidents/{id}/investigate`, `GET /tenants/{t}/investigations[/{inv}]`, `GET .../{inv}/events` (SSE), `POST .../{inv}/resume`, `POST .../{inv}/review`, `GET /tenants/{t}/graph?t=`, `GET /tenants/{t}/memory`, `POST /tenants/{t}/causes/{key}/retract`, `POST /tenants/{t}/alerts`. Run: `uv run uvicorn tracebrain.api.main:app --port 8000` (docs at `/docs`).
+
+Deviation: embeddings (sentence-transformers) are not used yet. Entity resolution is normalisation + token Jaccard + a small-LLM judge for borderline cases, and recall matches on symptom + service. That's enough on this dataset and avoids a ~1 GB torch install. B1 (vector RAG) will need the `embed` extra.
+
 Companion to [PLAN.md](PLAN.md), which covers the what and the why. This file covers the how: repo layout, modules, interfaces, queries, prompts, API, UI, tests and the ticket list.
 
 Stack: Python 3.11, `falkordb` client, `mcp` (FastMCP), LLM via the `openai` SDK against free OpenAI-compatible endpoints with automatic fallback **Groq → Cerebras → Gemini** (`gpt-oss-120b` for agents; wrapper + cache in `tracebrain/llm.py`, tested offline in `tests/test_llm.py`), FastAPI + SSE, `sentence-transformers` (local embeddings, `all-MiniLM-L6-v2`, 384-dim), Vite + React + Cytoscape.js, Docker Compose.

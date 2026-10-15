@@ -1,9 +1,10 @@
-"""Day-1 end-to-end check: one agent investigates one incident through the MCP tools.
+"""End-to-end check with a real LLM: Triage -> Investigator -> evidence gate on one incident.
 
-    uv run python -m tracebrain.agents.smoke --tenant payments --incident inc:001
+    uv run python -m tracebrain.agents.smoke --tenant payments --incident inc:001 [--no-memory] [--confirm]
 
-Needs at least one LLM key in .env. Prints the trace, the agent's ranked answer, and whether the
-hidden ground-truth culprit was in it (ground truth is read only here, never shown to the agent).
+Needs at least one LLM key in .env. Prints the live trace, the hypotheses with claim verdicts, and
+whether the hidden ground-truth culprit was found (ground truth is read only here, never by agents).
+--confirm then reviews the top hypothesis as the ground truth says (teaching memory).
 """
 
 import argparse
@@ -11,51 +12,46 @@ import json
 from pathlib import Path
 
 import anyio
-from mcp import Client
 
-from tracebrain.agents.loop import run_agent
-from tracebrain.tools import impl, mcp_server
-from tracebrain.tools.impl import ToolCtx
+from tracebrain import orchestrator
+from tracebrain.agents import curator
+from tracebrain.memory import episodic
 
-SYSTEM = """You are an incident investigator. Use the tools to find which deploy most likely caused the
-incident. Facts must come from tool results; never invent services, deploys or edge ids.
-Steps: get the incident, get ranked suspects for the alerted service, check paths or owners if useful,
-then call submit_suspects with your top 3 (best first) and the edge_ids that support each one."""
-
-SUBMIT = {"type": "function", "function": {
-    "name": "submit_suspects",
-    "description": "Submit your final ranked suspects (best first).",
-    "parameters": {"type": "object", "properties": {
-        "suspects": {"type": "array", "maxItems": 3, "items": {"type": "object", "properties": {
-            "deploy": {"type": "string"}, "reason": {"type": "string"},
-            "edge_ids": {"type": "array", "items": {"type": "integer"}}},
-            "required": ["deploy", "reason", "edge_ids"]}}},
-        "required": ["suspects"]}}}
+TRUTH = Path(__file__).resolve().parents[2] / "data" / "ground_truth.json"
 
 
-async def main(tenant: str, incident_id: str) -> int:
-    truth = json.loads((Path(__file__).resolve().parents[2] / "data" / "ground_truth.json")
-                       .read_text(encoding="utf-8")).get(f"{tenant}/{incident_id}")
-    inc = impl.get_incident(ToolCtx(tenant, 0), incident_id)
-    ctx = ToolCtx(tenant=tenant, t=inc["ts"], investigation_id=f"smoke:{incident_id}")
+def show(kind: str, d: dict) -> None:
+    if kind == "step":
+        err = f"  ERROR {d['error']}" if d["error"] else ""
+        print(f"  [{d['n']:>2}] {d['agent']:<12} {d['tool']}({json.dumps(d['args'])[:90]}) {d['ms']}ms "
+              f"edges={len(d['edge_ids'])}{err}")
+    elif kind in ("state", "handoff", "fallback_findings", "error"):
+        print(f"  -- {kind}: {({k: v for k, v in d.items() if k != 'investigation'})}")
 
-    async with Client(mcp_server.server) as client:
-        run = await run_agent(
-            "investigator", SYSTEM, f"Investigate incident {incident_id}.", ctx,
-            {"get_incident", "suspects", "path_between", "owners_of", "blast_radius"}, client,
-            final_tool=SUBMIT,
-            on_step=lambda s: print(f"  [{s.n}] {s.tool}({json.dumps(s.args)}) {s.ms}ms "
-                                    f"edges={len(s.edge_ids)}{' ERROR ' + s.error if s.error else ''}"),
-        )
-    print(f"\nstopped={run.stopped} turns={run.turns} tool_calls={len(run.steps)} "
-          f"tokens={run.usage} models={sorted(run.models)}")
-    picks = [s["deploy"] for s in (run.final or {}).get("suspects", [])]
-    for s in (run.final or {}).get("suspects", []):
-        print(f"  -> {s['deploy']}: {s['reason']} (edges {s['edge_ids']})")
-    if truth and truth["culprit_deploy"]:
-        hit = truth["culprit_deploy"] in picks
-        print(f"\nground truth {truth['culprit_deploy']}: top-1 {'HIT' if picks[:1] == [truth['culprit_deploy']] else 'miss'}, "
-              f"top-3 {'HIT' if hit else 'miss'}")
+
+async def main(tenant: str, incident_id: str, memory: bool, confirm: bool) -> int:
+    truth = json.loads(TRUTH.read_text(encoding="utf-8")).get(f"{tenant}/{incident_id}", {})
+    inv_id = await orchestrator.investigate(tenant, incident_id, memory_enabled=memory, on_event=show)
+    full = episodic.full(tenant, inv_id)
+    print(f"\n{inv_id}: state={full['state']} outcome={full['outcome']}")
+    for h in full["hypotheses"]:
+        print(f"  #{h['rank']} {h['deploy_id']} score={h['score']} cause={h['likely_cause']!r}")
+        for c in h["claims"]:
+            print(f"       {'OK ' if c['verified'] else 'BAD'} {c['text']}  {c['edge_ids']}  {'' if c['verified'] else c['reason']}")
+    for a in full["actions"]:
+        print(f"  action {a['kind']} -> {a['target']}: {a['reason']}")
+    picks = [h["deploy_id"] for h in full["hypotheses"]]
+    if truth:
+        want = truth["culprit_deploy"]
+        if want is None:
+            print(f"\nground truth: no culprit -> {'CORRECT abstain' if full['outcome'] == 'abstained' else 'should have abstained'}")
+        else:
+            print(f"\nground truth {want}: top-1 {'HIT' if picks[:1] == [want] else 'miss'}, "
+                  f"top-3 {'HIT' if want in picks else 'miss'}")
+        if confirm and want:
+            out = curator.review(tenant, inv_id, "confirm", reviewer="smoke", deploy_id=want,
+                                 cause_text=truth["cause_key"].replace("_", " "))
+            print(f"confirmed -> lesson {out['lesson']['id']} (cause {out['cause_key']})")
     return 0
 
 
@@ -63,5 +59,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--tenant", default="payments")
     ap.add_argument("--incident", default="inc:001")
+    ap.add_argument("--no-memory", action="store_true")
+    ap.add_argument("--confirm", action="store_true", help="confirm with the ground-truth answer afterwards")
     a = ap.parse_args()
-    raise SystemExit(anyio.run(main, a.tenant, a.incident))
+    raise SystemExit(anyio.run(main, a.tenant, a.incident, not a.no_memory, a.confirm))

@@ -11,6 +11,9 @@ from functools import lru_cache
 
 from tracebrain import db, queries, scoring
 from tracebrain.config import DEFAULT_WINDOW_S
+from tracebrain.memory import episodic, procedural
+
+FINDING_KINDS = {"blast_radius", "owners", "similar_incidents", "note"}
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,9 @@ class ToolCtx:
     investigation_id: str = ""
     memory_enabled: bool = True
     window_s: int = DEFAULT_WINDOW_S
+    symptom: str = ""                # of the incident under investigation (set by the orchestrator)
+    service: str = ""                # alerted service of that incident
+    agent: str = ""                  # which agent is calling (for blackboard provenance)
 
 
 class ToolError(Exception):
@@ -74,6 +80,8 @@ def suspects(ctx: ToolCtx, service: str, window_hours: float | None = None, limi
     services = sorted({r["service"] for r in rows})
     fails = {r["service"]: r["n"] for r in
              db.read(ctx.tenant, queries.SERVICE_FAIL_COUNTS, {"services": services, "t": ctx.t})}
+    if lesson_boosts is None and ctx.memory_enabled and ctx.symptom:
+        lesson_boosts = procedural.boosts(ctx.tenant, ctx.symptom, service, ctx.t)
     ranked = scoring.rank(rows, ctx.t, window_s, fails, _pagerank(ctx.tenant), lesson_boosts)
     out = [{
         "rank": r["rank"], "deploy": r["deploy"], "service": r["service"], "hops": r["proximity"],
@@ -94,6 +102,60 @@ def path_between(ctx: ToolCtx, from_service: str, to_service: str) -> dict:
                 "edge_ids": [], "note": "no dependency path at incident time"}
     return {"from": from_service, "to": to_service, "as_of": ctx.t, "path": rows[0]["services"],
             "edge_ids": rows[0]["edge_ids"]}
+
+
+def _require_investigation(ctx: ToolCtx) -> None:
+    if not ctx.investigation_id:
+        raise ToolError("no investigation in context (blackboard tools only work inside an investigation)")
+
+
+def write_finding(ctx: ToolCtx, kind: str, payload: dict) -> dict:
+    """Blackboard write: the only graph write an agent can trigger, scoped to its own investigation."""
+    _require_investigation(ctx)
+    if kind not in FINDING_KINDS:
+        raise ToolError(f"kind must be one of {sorted(FINDING_KINDS)}")
+    fid = episodic.write_finding(ctx.tenant, ctx.investigation_id, ctx.agent or "agent", kind, payload)
+    return {"finding_id": fid, "kind": kind, "stored": True}
+
+
+def read_findings(ctx: ToolCtx) -> dict:
+    _require_investigation(ctx)
+    return {"findings": episodic.findings(ctx.tenant, ctx.investigation_id)}
+
+
+def recall_similar(ctx: ToolCtx, limit: int = 5) -> dict:
+    """Confirmed past incidents with the same symptom (same service first). Summaries only;
+    use get_past_investigation for details. Empty when memory is disabled."""
+    if not ctx.memory_enabled:
+        return {"similar": [], "note": "memory disabled for this investigation"}
+    rows = db.read(ctx.tenant, queries.RECALL_SIMILAR,
+                   {"t": ctx.t, "symptom": ctx.symptom, "service": ctx.service, "limit": limit})
+    return {"symptom": ctx.symptom, "similar": rows}
+
+
+def recall_lessons(ctx: ToolCtx, service: str | None = None) -> dict:
+    if not ctx.memory_enabled:
+        return {"lessons": [], "note": "memory disabled for this investigation"}
+    service = service or ctx.service
+    return {"symptom": ctx.symptom, "service": service,
+            "lessons": procedural.recall(ctx.tenant, ctx.symptom, service, ctx.t),
+            "note": "check_first = service whose deploys caused this symptom before (human-confirmed)."}
+
+
+def get_past_investigation(ctx: ToolCtx, incident_id: str) -> dict:
+    """Progressive disclosure: the confirmed investigation of ONE earlier incident (tools used,
+    hypotheses and verified claims)."""
+    if not ctx.memory_enabled:
+        return {"error": "memory disabled for this investigation"}
+    rows = db.read(ctx.tenant, queries.PAST_INCIDENT_INVESTIGATION, {"incident_id": incident_id, "t": ctx.t})
+    if not rows or not rows[0]["investigation"]:
+        raise ToolError(f"no confirmed earlier investigation for '{incident_id}'")
+    inv = rows[0]["investigation"]
+    hyps = episodic.hypotheses(ctx.tenant, inv)
+    return {"incident": incident_id, "confirmed_cause": rows[0]["cause"],
+            "tool_sequence": [s["tool"] for s in episodic.steps(ctx.tenant, inv)],
+            "hypotheses": [{"rank": h["rank"], "deploy_id": h["deploy_id"], "likely_cause": h["likely_cause"],
+                            "verified_claims": [c["text"] for c in h["claims"] if c["verified"]]} for h in hyps]}
 
 
 def centrality(ctx: ToolCtx) -> dict:

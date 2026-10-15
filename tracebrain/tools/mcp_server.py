@@ -22,6 +22,9 @@ META_TENANT = "tracebrain/tenant"
 META_T = "tracebrain/t"
 META_INVESTIGATION = "tracebrain/investigation"
 META_MEMORY = "tracebrain/memory"
+META_SYMPTOM = "tracebrain/symptom"
+META_SERVICE = "tracebrain/service"
+META_AGENT = "tracebrain/agent"
 
 server = MCPServer(
     "tracebrain",
@@ -37,7 +40,9 @@ def tool_ctx(ctx: Context) -> ToolCtx:
         raise ToolError("no tenant in request metadata and TRACEBRAIN_DEFAULT_TENANT is not set")
     return ToolCtx(tenant=str(tenant), t=int(meta.get(META_T) or time.time()),
                    investigation_id=str(meta.get(META_INVESTIGATION) or ""),
-                   memory_enabled=bool(meta.get(META_MEMORY, True)))
+                   memory_enabled=bool(meta.get(META_MEMORY, True)),
+                   symptom=str(meta.get(META_SYMPTOM) or ""), service=str(meta.get(META_SERVICE) or ""),
+                   agent=str(meta.get(META_AGENT) or ""))
 
 
 def _run(fn, ctx: Context, *args, **kwargs) -> dict:
@@ -86,6 +91,40 @@ def path_between(from_service: str, to_service: str, ctx: Context) -> dict:
 def centrality(ctx: Context) -> dict:
     """Structural importance of each service (PageRank, betweenness). Time-agnostic prior only."""
     return _run(impl.centrality, ctx)
+
+
+@server.tool()
+def write_finding(kind: str, payload: dict, ctx: Context) -> dict:
+    """Record a finding on this investigation's shared blackboard so the next agent can use it.
+    kind: blast_radius | owners | similar_incidents | note. Include the edge_ids that support it."""
+    return _run(impl.write_finding, ctx, kind, payload)
+
+
+@server.tool()
+def read_findings(ctx: Context) -> dict:
+    """Read the findings earlier agents recorded on this investigation's blackboard."""
+    return _run(impl.read_findings, ctx)
+
+
+@server.tool()
+def recall_similar(ctx: Context, limit: int = 5) -> dict:
+    """Memory: earlier human-confirmed incidents with the same symptom (same service first), with their
+    confirmed cause and culprit service. Summaries only."""
+    return _run(impl.recall_similar, ctx, limit)
+
+
+@server.tool()
+def recall_lessons(ctx: Context, service: str | None = None) -> dict:
+    """Memory: confirmed lessons for this symptom on the alerted service, e.g. 'check redis-cart first',
+    with success/fail counts. Lessons also boost matching suspects' lesson_match score."""
+    return _run(impl.recall_lessons, ctx, service)
+
+
+@server.tool()
+def get_past_investigation(incident_id: str, ctx: Context) -> dict:
+    """Memory, details on demand: the confirmed investigation of one earlier incident (tool sequence,
+    hypotheses and verified claims). Use after recall_similar shows it is relevant."""
+    return _run(impl.get_past_investigation, ctx, incident_id)
 
 
 def main() -> None:

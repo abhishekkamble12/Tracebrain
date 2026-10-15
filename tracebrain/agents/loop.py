@@ -53,9 +53,11 @@ class AgentRun:
         return {e for s in self.steps for e in s.edge_ids}
 
 
-def meta_for(ctx: ToolCtx) -> dict:
+def meta_for(ctx: ToolCtx, agent: str = "") -> dict:
     return {mcp_server.META_TENANT: ctx.tenant, mcp_server.META_T: ctx.t,
-            mcp_server.META_INVESTIGATION: ctx.investigation_id, mcp_server.META_MEMORY: ctx.memory_enabled}
+            mcp_server.META_INVESTIGATION: ctx.investigation_id, mcp_server.META_MEMORY: ctx.memory_enabled,
+            mcp_server.META_SYMPTOM: ctx.symptom, mcp_server.META_SERVICE: ctx.service,
+            mcp_server.META_AGENT: agent}
 
 
 def clean_schema(schema: Any) -> Any:
@@ -102,6 +104,22 @@ def collect_edge_ids(obj: Any) -> list[int]:
     return sorted(found)
 
 
+def replay(steps: list[Step]) -> list[dict]:
+    """Rebuild the conversation from persisted steps so a resumed agent continues where it stopped,
+    without re-running (or re-paying for) the tool calls it already made."""
+    if not steps:
+        return []
+    msgs: list[dict] = []
+    for s in steps:
+        call = llm.ToolCall(f"replay-{s.n}", s.tool, s.args, json.dumps(s.args))
+        msgs.append({"role": "assistant", "content": "", "tool_calls": [
+            {"id": call.id, "type": "function", "function": {"name": s.tool, "arguments": call.raw_arguments}}]})
+        msgs.append(llm.tool_result_message(call, s.result))
+    msgs.append({"role": "user", "content": "(Resumed after an interruption. The tool results above were "
+                                            "already gathered; continue from where you left off.)"})
+    return msgs
+
+
 def _decode(result) -> Any:
     text = "".join(getattr(c, "text", "") for c in result.content)
     try:
@@ -118,12 +136,14 @@ async def run_agent(
     allowed_tools: set[str],
     client: Client,
     final_tool: dict | None = None,
-    validate_final: Callable[[dict], str | None] | None = None,
+    validate_final: Callable[[dict, "AgentRun"], str | None] | None = None,
     max_turns: int = 12,
     max_final_retries: int = 2,
     chat_fn: ChatFn = llm.chat,
     on_step: StepHook | None = None,
+    history: list[dict] | None = None,
 ) -> AgentRun:
+    """`history`: replayed tool-call/result messages from before a restart (see replay())."""
     run = AgentRun(agent=name)
     listed = (await client.list_tools()).tools
     tools = [to_openai_tool(t.name, t.description, t.input_schema) for t in listed if t.name in allowed_tools]
@@ -131,7 +151,8 @@ async def run_agent(
     if final_tool:
         tools.append(final_tool)
 
-    messages: list[dict] = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    messages: list[dict] = [{"role": "system", "content": system}, {"role": "user", "content": user},
+                            *(history or [])]
     final_rejections = 0
     nudged = False
 
@@ -154,7 +175,7 @@ async def run_agent(
         for call in reply.tool_calls:
             if call.name == final_name:
                 problem = "unparseable arguments" if "_unparseable" in call.arguments else (
-                    validate_final(call.arguments) if validate_final else None)
+                    validate_final(call.arguments, run) if validate_final else None)
                 if problem and final_rejections < max_final_retries:
                     final_rejections += 1
                     messages.append(llm.tool_result_message(call, {"rejected": problem,
@@ -174,7 +195,7 @@ async def run_agent(
                 result = {"error": "arguments were not valid JSON; retry with a JSON object"}
                 error = "bad_json"
             else:
-                result = _decode(await client.call_tool(call.name, call.arguments, meta=meta_for(ctx)))
+                result = _decode(await client.call_tool(call.name, call.arguments, meta=meta_for(ctx, name)))
                 if isinstance(result, dict) and "error" in result:
                     error = "tool_error"
             step = Step(len(run.steps) + 1, name, call.name, call.arguments, result,
