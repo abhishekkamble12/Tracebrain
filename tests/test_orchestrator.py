@@ -117,6 +117,24 @@ def test_full_pipeline_persists_everything(world):
     assert stats["f"] == 1.0 and stats["n"] == len(full["steps"])
 
 
+def test_broken_event_listener_does_not_fail_the_investigation(world):
+    """Regression: a console that can't print the model's Unicode used to mark the run FAILED."""
+    tenant, w = world
+    iid, truth = incidents_of(w, "timeout")[0]
+
+    def listener(kind, data):
+        raise UnicodeEncodeError("charmap", "‑", 0, 1, "character maps to <undefined>")
+
+    inv_id = anyio.run(lambda: orchestrator.investigate(tenant, iid, chat_fn=Policy(truth["service"]),
+                                                        on_event=listener))
+    assert episodic.get(tenant, inv_id)["state"] == "AWAITING_REVIEW"
+
+
+def test_describe_error_unwraps_exception_groups():
+    e = ExceptionGroup("unhandled errors in a TaskGroup", [llm.AllProvidersExhausted("groq: quota")])
+    assert orchestrator.describe_error(e) == "AllProvidersExhausted: groq: quota"
+
+
 def test_gate_bounces_fabricated_edges_then_accepts(world):
     tenant, w = world
     iid, truth = incidents_of(w, "timeout")[0]

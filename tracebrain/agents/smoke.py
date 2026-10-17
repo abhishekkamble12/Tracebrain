@@ -3,12 +3,15 @@
     uv run python -m tracebrain.agents.smoke --tenant payments --incident inc:001 [--no-memory] [--confirm]
 
 Needs at least one LLM key in .env. Prints the live trace, the hypotheses with claim verdicts, and
-whether the hidden ground-truth culprit was found (ground truth is read only here, never by agents).
+whether the hidden ground-truth culprit was found. Agents never read ground truth; besides this
+script, only the simulated rollback check (verification.py) does, after the agents have finished.
 --confirm then reviews the top hypothesis as the ground truth says (teaching memory).
 """
 
 import argparse
 import json
+import logging
+import sys
 from pathlib import Path
 
 import anyio
@@ -56,6 +59,9 @@ async def main(tenant: str, incident_id: str, memory: bool, confirm: bool) -> in
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # model text may hold any Unicode
+    for name in ("httpx", "httpx2"):                            # hide per-request lines
+        logging.getLogger(name).setLevel(logging.WARNING)
     ap = argparse.ArgumentParser()
     ap.add_argument("--tenant", default="payments")
     ap.add_argument("--incident", default="inc:001")

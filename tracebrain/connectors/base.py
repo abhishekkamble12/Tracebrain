@@ -1,5 +1,6 @@
-"""Connector contract: every source of graph data (synthetic, OTel traces, git, CODEOWNERS,
-RCAEval, postmortems) yields these records. ingest() turns them into MERGE upserts."""
+"""Connector contract: a source of graph data yields these records and ingest() turns them into
+MERGE upserts. Only the synthetic connector exists today; real sources (traces, git, CODEOWNERS)
+would implement the same protocol."""
 
 from dataclasses import dataclass, field
 from typing import Iterable, Protocol

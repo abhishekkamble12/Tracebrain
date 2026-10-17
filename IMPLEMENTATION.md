@@ -8,8 +8,9 @@
 | ✅ | T1.7d | Sandbox rollback check (`verification.py`): `Graph.copy` → mark rolled back → environment answers → `(Hypothesis)-[:VERIFIED_BY]->(Verification)` → `VERIFIED` state. Only the top hypothesis is checked, and the result never re-ranks |
 | ✅ | T1.8 | FastAPI (`tracebrain/api/main.py`) + SSE event bus with replay for late subscribers (`events.py`), alert webhook, as-of graph endpoint for the UI |
 | ✅ | resume | `orchestrator.run()` continues from the stored state; completed tool calls are replayed from `Step` nodes, not re-executed; `FAILED` is resumable; `POST .../resume` |
-| ⏳ | first real-LLM run | needs a key in `.env`: `uv run python -m tracebrain.agents.smoke --incident inc:001` |
-| ⬜ | Day 3: UI + eval (baselines, memory ON/OFF, failure suite), `make judge-check` | |
+| ✅ | first real-LLM runs | Groq `gpt-oss-120b`, payments: inc:001 (culprit #2 behind a newer decoy, 4/4 claims verified), confirm → inc:007 repeat with memory ON (culprit #1), inc:025 correct abstain, inc:002 (culprit #2). Fixed: event-hook crash on Unicode (Windows console) failed runs; ExceptionGroup hid errors; repeated 8K-TPM 429s exhausted retries; prompts now batch independent calls (~25% fewer tokens/run). Top-1 misses on first occurrences are a ranking question → calibrate weights on the seen split in eval |
+| ⬜ | **Oct 16:** UI + eval (baselines, memory ON/OFF, failure suite), `make judge-check` | see PLAN.md "Revised schedule" |
+| ⬜ | **Oct 16 late / 17 AM:** earned autonomy A1-A6 (§14d) | only after the UI + eval exit checks pass; first to cut |
 
 **API (as built)**: `GET /health`, `GET /tenants`, `GET /tenants/{t}/incidents`, `POST /tenants/{t}/incidents/{id}/investigate`, `GET /tenants/{t}/investigations[/{inv}]`, `GET .../{inv}/events` (SSE), `POST .../{inv}/resume`, `POST .../{inv}/review`, `GET /tenants/{t}/graph?t=`, `GET /tenants/{t}/memory`, `POST /tenants/{t}/causes/{key}/retract`, `POST /tenants/{t}/alerts`. Run: `uv run uvicorn tracebrain.api.main:app --port 8000` (docs at `/docs`).
 
@@ -17,7 +18,7 @@ Deviation: embeddings (sentence-transformers) are not used yet. Entity resolutio
 
 Companion to [PLAN.md](PLAN.md), which covers the what and the why. This file covers the how: repo layout, modules, interfaces, queries, prompts, API, UI, tests and the ticket list.
 
-Stack: Python 3.11, `falkordb` client, `mcp` (FastMCP), LLM via the `openai` SDK against free OpenAI-compatible endpoints with automatic fallback **Groq → Cerebras → Gemini** (`gpt-oss-120b` for agents; wrapper + cache in `tracebrain/llm.py`, tested offline in `tests/test_llm.py`), FastAPI + SSE, `sentence-transformers` (local embeddings, `all-MiniLM-L6-v2`, 384-dim), Vite + React + Cytoscape.js, Docker Compose.
+Stack: Python 3.11, `falkordb` client, `mcp` (FastMCP), LLM via the `openai` SDK against the **Groq** free tier (OpenAI-compatible; `gpt-oss-120b` for agents; wrapper + cache in `tracebrain/llm.py`, tested offline in `tests/test_llm.py`), FastAPI + SSE, `sentence-transformers` (local embeddings, `all-MiniLM-L6-v2`, 384-dim), Vite + React + Cytoscape.js, Docker Compose.
 
 > **Verify before building on it.** All Cypher and `algo.*` calls below are written against FalkorDB docs as remembered. Ticket **T0.2** checks each one against the running server and records the results in `docs/falkordb_capabilities.md`. Anything unsupported gets replaced before tools are built on it.
 
@@ -493,6 +494,8 @@ async def review(tenant, inv_id, verdict, cause_text, deploy_id, runbook_id, rev
 
 ## 11. UI (`ui/`)
 
+> **Superseded by [docs/FRONTEND_PLAN.md](docs/FRONTEND_PLAN.md)** (React Flow instead of Cytoscape, design system, event → UI mapping, tickets U0-U10). The original sketch is kept below for reference.
+
 Single page, 3 columns:
 - **Left:** `TenantSwitcher`, `IncidentList` (status chips), "Investigate" button, "Memory ON/OFF" toggle.
 - **Center:** `GraphView` (Cytoscape, `cose-bilkent` or `dagre` layout). Shows the subgraph around the alerted service at time `t`. Blast radius nodes are orange, the suspect path is red and thick, and the culprit deploy is a red diamond. Edge ids are kept as Cytoscape element ids, so hovering a claim highlights its exact edges.
@@ -620,6 +623,65 @@ Cut order for these: T3.6 → T2.4b scale test → T1.7d (fall back to "proposed
 **Stop-loss:** if R1 isn't working after about 3 hours, drop R1-R4 and ship on synthetic + RCAEval. Decide by **Day 2 at 12:00**.
 **Team split:** with a teammate, R1-R4 is their whole lane. Solo: do R1 on Day 1 evening, and do R2-R3 only if T1.7 is done by Day 2 afternoon.
 
+## 14d. Earned autonomy tasks (PLAN.md §9b), Oct 16 late / Oct 17 AM
+
+**Start only after** the Oct 16 UI and eval exit checks pass. First item on the cut list.
+**Design constraint:** the investigation state machine does **not** change. Mitigation state lives on the `Action` node, and long-term memory is still written only by `curator.review`.
+
+### Design
+- **Customer impact** (`impact.py`): synthetic `ServiceRec` gains `journey` (`browse`: frontend, productcatalog, recommendation, ad, currency/-v2; `cart`: cart, redis-cart; `purchase`: checkout, payment, shipping, email). Impact = journeys of {alerted service} ∪ blast radius, e.g. `{"journeys": ["purchase", "browse"], "customer_facing": true}`. Stored on the Investigation and shown in the UI header. Real connectors set `journey` from config.
+- **Timing**: `episodic.set_state` also writes `<state>_at` (e.g. `v.triaged_at`). Mitigation writes `v.mitigated_at`. Derived: `time_to_cause = hypothesized_at - started`, `time_to_mitigation = mitigated_at - started`. Human approval wait is reported separately; we never invent it.
+- **Policy** (`policy.py`, deterministic, pure function over graph facts):
+  ```python
+  def decide(tenant, inv_id) -> dict:
+      # returns {"mode": "auto" | "approval_required" | "none",
+      #          "checks": [{"name", "passed", "detail"}...], "deploy_id": ...}
+  CHECKS = [
+    "not_abstained",          # there is a top hypothesis
+    "sandbox_verified",       # top hypothesis has Verification.clears = true
+    "reversible_change",      # Deploy.kind in {config, flag}
+    "earned_by_memory",       # non-retracted Lesson(symptom, service -> deploy's service), weight >= 0.5, learned before t
+    "evidence_complete",      # all claims of the top hypothesis verified
+    "clear_margin",           # score(#1) - score(#2) >= 0.25, or a single suspect
+    "customers_affected",     # impact.customer_facing
+    "autonomy_enabled",       # tenant kill switch (TenantSettings node), default ON for demo tenants
+    "no_prior_auto_action",   # at most one automatic action per incident
+  ]
+  ```
+  `mode = auto` iff all checks pass; `none` if abstained; otherwise `approval_required`. The decision and its checks are stored on the rollback `Action` as `policy_json` and streamed as a `policy` event, so the UI shows the checklist.
+- **Executor** (`executor.py`):
+  ```python
+  class Executor(Protocol):
+      name: str
+      def rollback(self, tenant, deploy_id) -> dict: ...
+      def undo(self, tenant, rollback_id) -> dict: ...
+      def symptom_cleared(self, tenant, incident_id) -> bool | None: ...
+  ```
+  `SimulatedExecutor`: writes `(Rollback {id, ts, by, mode: 'auto'|'approved', simulated: true})-[:REVERTS]->(Deploy)`. `symptom_cleared` uses the same SyntheticEnvironment as verification (labelled simulated). `LabExecutor` (only with R1-R3): `git revert` in `tracebrain-lab`, flagd reload, poll Prometheus until recovered or timeout.
+  **Flow:** execute → check symptom → if not cleared: `undo` + `Action.status = failed_undone` + escalate (page action, `escalated` event). If cleared: `Action.status = done_verified`, `v.mitigated_at`.
+- **Handover message** (`handover.py`): a deterministic text from graph facts: symptom + start, customer impact, cause hypothesis + deploy + author + owner team, cited path (service names), what was done (auto/approved/proposed) + result, Undo endpoint. Stored on the page `Action` as `message`.
+- **API**:
+  - `POST /tenants/{t}/investigations/{inv}/mitigate` (human approval path; runs the same executor + check)
+  - `POST /tenants/{t}/rollbacks/{id}/undo`
+  - `GET/PUT /tenants/{t}/settings` (`autonomy_enabled`)
+- **Orchestrator hook:** after `_verify` (whether or not it moved to VERIFIED), call `policy.decide`; if `auto`, execute immediately (before AWAITING_REVIEW is reached). The investigation still ends in `AWAITING_REVIEW` for the human's confirm/reject, and that review is what teaches memory.
+
+### Tickets
+| ID | Task | Est | Done when |
+|---|---|---|---|
+| **A1** | `journey` on services + `impact.py` + impact on Investigation + UI header | 0.5h | incident shows "purchase flow affected" |
+| **A2** | `<state>_at` timestamps + `time_to_cause` / `time_to_mitigation` in run stats + UI timer | 0.5h | stats present on every investigation |
+| **A3** | `policy.py` with the 9 checks, stored + streamed decision | 1h | first-time pattern → `approval_required` (fails `earned_by_memory`); after one confirmed review of the same pattern → `auto` |
+| **A4** | `executor.py` (SimulatedExecutor), auto path in orchestrator, approval path endpoint, undo + escalate | 1h | auto rollback recorded as `Rollback` node; wrong-deploy rollback is undone + escalated |
+| **A5** | `handover.py` + page action message | 0.5h | message names cause, deploy, owner, path, action, Undo |
+| **A6** | Tests: policy matrix (each check failing alone → not auto), code-change never auto, kill switch, one auto action max, memory unchanged by auto actions until review, undo on failed check | 0.5h | all green |
+| A7 | (stretch, needs R1-R3) `LabExecutor`: real `git revert` + Prometheus recovery check | 1.5h | real fault auto-mitigated in the OTel Demo |
+
+### Eval additions (honest)
+- Per incident: `time_to_cause`, `time_to_verified_fix`, and for repeats `time_to_mitigation (auto)`, all measured.
+- Policy correctness on the test split: how often `auto` fired on a **wrong** deploy (target 0; report it whatever it is), and how often it correctly declined (first-time patterns, code changes, failed checks).
+- No "time saved vs humans" claims: we have no human baseline data.
+
 ## 15. Risk register
 
 | Risk | Mitigation |
@@ -628,7 +690,7 @@ Cut order for these: T3.6 → T2.4b scale test → T1.7d (fall back to "proposed
 | Graph algorithms can't filter by time | Use them only as a weak prior (centrality feature) and document it. Time-critical logic stays in Cypher |
 | LLM invents edge ids | Faithfulness checker rejects them, and the prompt says "copy ids". Track the rate as a metric (this is a feature, not a bug) |
 | Agent loops/wanders | `max_turns=12`, tool allowlists, `suspects_asof` returns a pre-ranked list |
-| **Groq rate limits** (Developer-plan base for `gpt-oss-120b`: 30 RPM, **8K TPM, 200K tokens/day**, so only a handful of full investigations per day per model) | Response cache in `llm.py` (reruns cost 0 tokens); tool results truncated to 4K chars; compact system prompts; 429 backoff using `retry-after`; automatic fallback to Cerebras (1M tokens/day, 5 req/min) and then Gemini free tier; run the full eval on Cerebras overnight, once, and keep it cached. $0 budget: no paid plans. Check your actual limits at console.groq.com/settings/limits |
+| **Groq rate limits** (Developer-plan base for `gpt-oss-120b`: 30 RPM, **8K TPM, 200K tokens/day**, so only a handful of full investigations per day per model) | Response cache in `llm.py` (reruns cost 0 tokens); tool results truncated to 4K chars; compact system prompts; 429 backoff using `retry-after`; run the full eval once, spread over the day, and keep it cached. $0 budget: no paid plans. Check your actual limits at console.groq.com/settings/limits |
 | LLM latency during eval | Groq is fast; mocked LLM for the concurrency test |
 | UI eats Day 3 | Streamlit fallback consumes the same API. Decide by Day 3 13:00 |
 | Deployment fails late | Deploy a skeleton on Day 2 evening (T2.8 can start early with only the API) |

@@ -8,22 +8,17 @@ score = Σ w_k · f_k over features normalised to [0, 1]:
 - centrality   PageRank of the deploy's service, normalised (time-agnostic prior)
 - lesson_match strength of a confirmed Lesson pointing at this service (memory; 0 until learned)
 
-Weights default below; `data/weights.json` (written by calibration on the *seen* split only) overrides.
+Weights are hand-set below (no calibration step); eval/run.py reports how they perform.
 """
 
-import json
 import math
-from pathlib import Path
 
 FEATURES = ("proximity", "recency", "change_size", "fail_rate", "centrality", "lesson_match")
 DEFAULT_WEIGHTS = {"proximity": 1.0, "recency": 1.5, "change_size": 0.5, "fail_rate": 0.3,
                    "centrality": 0.2, "lesson_match": 2.0}
-WEIGHTS_PATH = Path(__file__).resolve().parent.parent / "data" / "weights.json"
 
 
 def load_weights() -> dict[str, float]:
-    if WEIGHTS_PATH.exists():
-        return {**DEFAULT_WEIGHTS, **json.loads(WEIGHTS_PATH.read_text(encoding="utf-8"))}
     return dict(DEFAULT_WEIGHTS)
 
 

@@ -224,3 +224,6 @@ eval/.cache/
 node_modules/
 ui/dist/
 *.rdb
+
+powershell.cmd
+ui/powershell.cmd

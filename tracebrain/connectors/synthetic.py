@@ -9,6 +9,10 @@ Timeline (56 days from T0):
 - day 36: `payment` ownership transfers to another team (ownership change)
 - day 44: `recommendation` starts calling `ad`
 Incidents are 2 days apart, each in an 08:00-20:00 slot, so 24h look-back windows never overlap.
+
+Stale decoys: when the alerted service had (or will have) a dependency that is NOT live at incident
+time, a recent, large deploy may land on that service. A time-blind graph counts it as a suspect;
+the as-of graph doesn't. They come from a separate RNG so the rest of the world is unchanged.
 """
 
 import random
@@ -104,6 +108,7 @@ TEMPLATES = [
      "cause": "retry_storm", "text": "shipping worker saturation"},
 ]
 OCCURRENCES = 4
+STALE_DECOY_P = 0.8
 # No-deploy incidents (external cause): alerts on leaf services with no dependencies.
 ABSTAIN = [
     {"type": "latency", "alert": "ad", "text": "ad service latency elevated", "day": 51},
@@ -133,6 +138,14 @@ def closure_at(svc: str, t: int, max_hops: int = 3) -> dict[str, int]:
     callees: dict[str, list[str]] = {}
     for a, b in deps_at(t):
         callees.setdefault(a, []).append(b)
+    return {svc: 0, **_bfs(svc, callees, max_hops)}
+
+
+def closure_ever(svc: str, max_hops: int = 3) -> dict[str, int]:
+    """Like closure_at, over every dependency edge ever seen (what a time-blind graph would use)."""
+    callees: dict[str, list[str]] = {}
+    for d in DEPENDENCIES:
+        callees.setdefault(d.src, []).append(d.dst)
     return {svc: 0, **_bfs(svc, callees, max_hops)}
 
 
@@ -248,6 +261,23 @@ def build_world(tenant: str) -> SyntheticWorld:
         raw_incidents.append({"ts": t, "service": ab["alert"], "symptom": ab["type"], "text": ab["text"],
                               "truth": {"type": "abstain", "culprit": None, "cause_key": None,
                                         "occurrence": 1, "split": "test"}})
+
+    # Stale decoys on dependencies that are not live at incident time (see module docstring).
+    stale_rng = random.Random(cfg["seed"] + 1000)
+    for inc in raw_incidents:
+        culprit = inc["truth"]["culprit"]
+        if culprit is None:
+            continue
+        t = inc["ts"]
+        stale = sorted(set(closure_ever(inc["service"])) - set(closure_at(inc["service"], t)))
+        if stale and stale_rng.random() < STALE_DECOY_P:
+            # Like the other decoys: about half the time newer than the culprit.
+            ts = (stale_rng.randint(culprit["ts"] + 60, t - 60) if stale_rng.random() < 0.5
+                  else stale_rng.randint(t - WINDOW + HOUR, t - 60))
+            d = {"service": stale_rng.choice(stale), "ts": ts, "kind": "code",
+                 "change_size": stale_rng.randint(300, 1500), "role": "decoy_stale"}
+            d["author"] = stale_rng.choice(cfg["teams"][_owner_at(cfg, d["service"], ts)])
+            raw_deploys.append(d)
 
     # Background deploys, kept out of every incident's look-back window.
     windows = [(i["ts"] - WINDOW - 2 * HOUR, i["ts"] + 2 * HOUR) for i in raw_incidents]

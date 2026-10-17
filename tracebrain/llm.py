@@ -1,4 +1,4 @@
-"""LLM calls over OpenAI-compatible endpoints (Groq, Cerebras, Gemini), all free tiers.
+"""LLM calls over OpenAI-compatible endpoints (Groq free tier; $0 budget).
 
 - Tries providers in `config.LLM_PROVIDERS` order; skips any without an API key.
 - Short 429 waits are honored; a long wait (daily quota gone) falls through to the next provider.
@@ -64,7 +64,7 @@ def available_providers() -> list[config.Provider]:
     providers = [config.PROVIDERS[n] for n in config.LLM_PROVIDERS if n in config.PROVIDERS]
     ready = [p for p in providers if p.api_key]
     if not ready:
-        raise RuntimeError("No LLM API key set. Add GROQ_API_KEY, CEREBRAS_API_KEY or GEMINI_API_KEY to .env")
+        raise RuntimeError("No LLM API key set. Add GROQ_API_KEY to .env")
     return ready
 
 
@@ -145,25 +145,32 @@ def chat(messages: list[dict], tools: list[dict] | None = None, tier: Tier = "ag
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice
 
-        for attempt in range(RETRIES_PER_PROVIDER):
+        attempt, limited, waited = 0, 0, 0.0
+        while attempt < RETRIES_PER_PROVIDER:
             start = time.perf_counter()
             try:
                 resp = _client(p.name).chat.completions.create(**payload)
             except RateLimitError as e:
-                wait = _retry_after(e, attempt)
-                if wait > config.LLM_MAX_WAIT_S:
-                    errors.append(f"{p.name}: quota (retry-after {wait:.0f}s)")
+                # Per-minute token limits (Groq free tier: 8K TPM) hit often mid-investigation. Short
+                # waits don't count as failed attempts; only the total wait is capped.
+                wait = _retry_after(e, limited)
+                limited += 1
+                if wait > config.LLM_MAX_WAIT_S or waited + wait > config.LLM_RATE_WAIT_BUDGET_S:
+                    errors.append(f"{p.name}: quota (retry-after {wait:.0f}s, waited {waited:.0f}s)")
                     break  # quota gone for now: next provider
                 time.sleep(wait)
+                waited += wait
                 continue
             except APIConnectionError as e:
                 errors.append(f"{p.name}: connection {e}")
                 time.sleep(2 ** attempt)
+                attempt += 1
                 continue
             except APIStatusError as e:
                 if e.status_code >= 500:
                     errors.append(f"{p.name}: {e.status_code}")
                     time.sleep(2 ** attempt)
+                    attempt += 1
                     continue
                 errors.append(f"{p.name}: {e.status_code} {e.message}")
                 break  # 4xx other than 429 (bad model name, unsupported param): next provider

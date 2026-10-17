@@ -10,6 +10,7 @@ import json
 import re
 import time
 import uuid
+from pathlib import Path
 from typing import Literal
 
 import anyio
@@ -30,6 +31,7 @@ app.state.bus = EventBus()
 app.state.chat_fn = llm.chat                         # tests swap in a scripted policy
 app.state.environment = orchestrator.DEFAULT_ENV     # rollback-verification environment
 app.state.judge = semantic.llm_judge                 # entity-resolution fallback
+app.state.results_path = Path(__file__).resolve().parents[2] / "eval" / "results.json"  # written by the eval
 _tasks: set[asyncio.Task] = set()
 TENANT_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 
@@ -100,6 +102,16 @@ def health() -> dict:
     return {"falkordb": db.ping(), "llm_providers": providers, "running": len(_tasks)}
 
 
+@app.get("/results")
+def results() -> dict:
+    """Evaluation results as written by the eval harness; 404 until it has run (the UI never shows
+    placeholder numbers)."""
+    path: Path = app.state.results_path
+    if not path.exists():
+        raise HTTPException(404, f"no evaluation results yet ({path.name} not found)")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 @app.get("/tenants")
 def list_tenants() -> list[str]:
     return tenants()
@@ -130,7 +142,11 @@ def list_investigations(tenant: str, limit: int = 50) -> list[dict]:
 def get_investigation(tenant: str, inv_id: str) -> dict:
     check_tenant(tenant)
     check_investigation(tenant, inv_id)
-    return episodic.full(tenant, inv_id)
+    out = episodic.full(tenant, inv_id)
+    out["running"] = any(not t.done() and t.get_name() == inv_id for t in _tasks)
+    inc_rows = db.read(tenant, queries.INCIDENT_BY_ID, {"id": out["incident_id"]})
+    out["incident"] = inc_rows[0] if inc_rows else None
+    return out
 
 
 @app.post("/tenants/{tenant}/investigations/{inv_id}/resume")
@@ -205,7 +221,7 @@ def retract_cause(tenant: str, key: str) -> dict:
 
 @app.post("/tenants/{tenant}/alerts")
 async def alert(tenant: str, req: AlertReq) -> dict:
-    """Webhook for live alerts (Alertmanager/Grafana or lab/watch.py): creates an incident and can
+    """Webhook for live alerts (e.g. an Alertmanager/Grafana contact point): creates an incident and can
     start investigating it immediately."""
     check_tenant(tenant)
     known = {r["name"] for r in db.read(tenant, queries.SERVICE_NAMES)}

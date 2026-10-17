@@ -11,6 +11,7 @@ Completed tool calls are replayed from their persisted Steps, not re-executed.
 Every event also goes to `on_event` (the API streams them to the UI).
 """
 
+import logging
 import time
 from typing import Any, Callable
 
@@ -23,12 +24,13 @@ from tracebrain.memory import episodic
 from tracebrain.tools import impl, mcp_server
 from tracebrain.tools.impl import ToolCtx
 
-TRIAGE_TOOLS = {"get_incident", "blast_radius", "owners_of", "recall_similar", "write_finding"}
+# get_incident stays on the MCP server for external clients; the brief already carries the incident.
+TRIAGE_TOOLS = {"blast_radius", "owners_of", "recall_similar", "write_finding"}
 INVESTIGATOR_TOOLS = {"read_findings", "suspects", "path_between", "owners_of", "centrality",
                       "recall_lessons", "recall_similar", "get_past_investigation"}
 REQUIRED_FINDINGS = {"blast_radius", "owners"}
-ABSTAIN_TAU = 0.0   # top suspect score below this forces abstention (calibrated on the seen split)
 
+log = logging.getLogger(__name__)
 EventHook = Callable[[str, dict], Any]
 DEFAULT_ENV = "default"
 
@@ -45,7 +47,10 @@ class Investigation:
 
     def emit(self, kind: str, data: dict) -> None:
         if self.on_event:
-            self.on_event(kind, {"investigation": self.inv_id, **data})
+            try:
+                self.on_event(kind, {"investigation": self.inv_id, **data})
+            except Exception:  # a broken listener (console, SSE) must never fail the investigation
+                log.exception("event hook failed on %r", kind)
 
     @property
     def state(self) -> str:
@@ -121,7 +126,7 @@ async def run(tenant: str, inv_id: str, *, chat_fn: Callable[..., llm.ChatResult
         else:
             await _stages(inv, ctx, inc, client, chat_fn, env)
     except Exception as e:  # quota, provider or graph failure: keep everything, mark resumable
-        inv.emit("error", {"error": f"{type(e).__name__}: {e}"})
+        inv.emit("error", {"error": describe_error(e)})
         if inv.state not in episodic.TERMINAL and inv.state != "FAILED":
             inv.move("FAILED")
 
@@ -130,6 +135,14 @@ async def run(tenant: str, inv_id: str, *, chat_fn: Callable[..., llm.ChatResult
     inv.emit("done", {"state": final["state"], "outcome": final["outcome"], "tool_calls": final["tool_calls"],
                       "faithfulness": final["faithfulness"]})
     return final["state"]
+
+
+def describe_error(e: BaseException) -> str:
+    """The MCP client runs inside an anyio TaskGroup, so a failure surfaces as an ExceptionGroup
+    whose message hides the cause. Report the leaf exception(s) instead."""
+    if isinstance(e, BaseExceptionGroup):
+        return "; ".join(describe_error(x) for x in e.exceptions)
+    return f"{type(e).__name__}: {e}"
 
 
 async def _stages(inv: Investigation, ctx: ToolCtx, inc: dict, client: Client, chat_fn,
@@ -194,8 +207,7 @@ async def _investigate(inv: Investigation, ctx: ToolCtx, brief: str, client: Cli
     final = dict(investigator.final or {})
     final.setdefault("hypotheses", [])
     rows = inv.suspect_rows()
-    top_score = max((r["score"] for r in rows.values()), default=None)
-    if not rows or (top_score is not None and top_score < ABSTAIN_TAU):
+    if not rows:  # nothing deployed on the as-of dependency closure in the window
         final.update(abstain=True, hypotheses=[],
                      abstain_reason=final.get("abstain_reason") or "no suspect deploys in the look-back window",
                      actions=[a for a in final.get("actions") or [] if a.get("kind") == "page"])

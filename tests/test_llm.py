@@ -95,3 +95,18 @@ def test_tool_calls_parsed_and_bad_json_tolerated(two_providers):
     assert r.tool_calls[0].arguments == {"service": "redis", "t": 50}
     assert "_unparseable" in r.tool_calls[1].arguments
     assert r.assistant_message()["tool_calls"][0]["function"]["name"] == "blast_radius"
+
+
+def test_repeated_short_rate_limits_keep_waiting(two_providers):
+    """Per-minute limits can hit more often than the error-retry count; that is not a failure."""
+    limits = [_err(RateLimitError, 429, {"retry-after": "5"}) for _ in range(llm.RETRIES_PER_PROVIDER + 2)]
+    two_providers["a"] = FakeClient([*limits, _resp("from a")])
+    two_providers["b"] = FakeClient([])
+    assert llm.chat([{"role": "user", "content": "hi"}]).provider == "a"
+
+
+def test_rate_limit_wait_budget_moves_on(two_providers, monkeypatch):
+    monkeypatch.setattr(config, "LLM_RATE_WAIT_BUDGET_S", 12.0)
+    two_providers["a"] = FakeClient([_err(RateLimitError, 429, {"retry-after": "5"}) for _ in range(3)])
+    two_providers["b"] = FakeClient([_resp("from b")])
+    assert llm.chat([{"role": "user", "content": "hi"}]).provider == "b"

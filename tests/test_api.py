@@ -56,6 +56,8 @@ def test_investigate_stream_review_memory(api):
     full = wait_for(client, base, {"AWAITING_REVIEW"})
     assert full["hypotheses"][0]["deploy_id"] == truth["culprit_deploy"]
     assert full["hypotheses"][0]["verifications"][0]["clears"] is True
+    assert "incident" in full and full["incident"]["id"] == iid
+    assert "running" in full and isinstance(full["running"], bool)
 
     kinds = [k for k, _ in sse_events(client, started["events"])]
     assert kinds[0] == "started" and kinds[-1] == "done"
@@ -83,6 +85,18 @@ def test_resume_over_http(api):
     assert client.post(f"{base}/resume").json()["from_state"] == "FAILED"
     assert wait_for(client, base, {"AWAITING_REVIEW", "VERIFIED"})["resumes"] == 1
     assert client.post(f"{base}/resume").status_code == 409
+
+
+def test_results_served_only_when_eval_has_run(tmp_path):
+    saved = app.state.results_path
+    app.state.results_path = tmp_path / "results.json"
+    try:
+        client = TestClient(app)
+        assert client.get("/results").status_code == 404
+        app.state.results_path.write_text('{"model": "groq/openai/gpt-oss-120b"}', encoding="utf-8")
+        assert client.get("/results").json() == {"model": "groq/openai/gpt-oss-120b"}
+    finally:
+        app.state.results_path = saved
 
 
 def test_alert_webhook_and_tenant_checks(api):

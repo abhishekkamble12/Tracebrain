@@ -9,6 +9,9 @@ The core contribution is three things together: **temporal graph reasoning + edg
 
 **Guiding principle:** don't make it bigger. Make it more trustworthy, measurable and convincing end to end. One flow that works reliably, plus honest numbers, beats many half-finished features.
 
+**Add-on line (only once §9b is built):** *"…and it acts on its own only where the graph proves it's safe: confirmed before, verified in a sandbox, easy to undo."*
+The headline above never changes. Earned autonomy is the **payoff** of the temporal graph + evidence + memory, not a new product. See §9b for the guardrails that keep it that way.
+
 ---
 
 ## 1. How we win each track
@@ -56,7 +59,7 @@ The judges' "key focus" bullets are below, each mapped to a concrete, demo-able 
             └──────────► FalkorDB (one graph per tenant) ◄────────────────────────────────┘
 ```
 
-- **LLM ($0 budget, free tiers only):** one OpenAI-compatible client (`tracebrain/llm.py`) with automatic fallback **Groq → Cerebras → Gemini**. Groq (`openai/gpt-oss-120b`) for building and the demo, since it's fastest. Cerebras (`gpt-oss-120b`, 1M tokens/day) for the evaluation runs. Gemini is the last resort. Every response is cached on disk, and every result records the provider and model that produced it.
+- **LLM ($0 budget, free tiers only):** one OpenAI-compatible client (`tracebrain/llm.py`) on the **Groq** free tier (`openai/gpt-oss-120b`) for building, the demo and the eval. Cerebras and Gemini were dropped: neither is free. Every response is cached on disk, and every result records the provider and model that produced it.
 - **MCP server:** Python (`mcp` / FastMCP) + `falkordb` client.
 - **Backend:** FastAPI, with server-sent events to stream the agent trace to the UI.
 - **UI:** Vite + React + Cytoscape.js for the graph (fallback: Streamlit + pyvis if frontend time runs out).
@@ -239,8 +242,19 @@ Work lanes, if you're a team: **A** = graph/data/eval, **B** = agents/MCP, **C**
 - [ ] Optional blog post (AirPods side prize). Can reuse the README.
 - [ ] Submit by 9 PM to leave a buffer.
 
+### Revised schedule (we're ahead: Days 1 and 2 were both finished on Oct 15)
+| When | Work | Exit check |
+|---|---|---|
+| **Oct 16 AM** | First real-LLM runs (keys), fix agent failure modes; **UI** core (incident list, live trace, graph with highlighted path, ✓/✗ claims, review box) | One incident runs end to end in the browser with a real LLM |
+| **Oct 16 PM** | **Evaluation**: B0, B1, Tracebrain, memory OFF/ON, temporal vs naive, **failure suite**, leak test; `make judge-check` | `eval/results.md` filled with real numbers |
+| **Oct 16 late / Oct 17 AM** | **§9b earned autonomy** (tasks A1-A6 in IMPLEMENTATION.md §14d), only after the two rows above pass their exit checks | Repeat incident is auto-mitigated with every policy check shown |
+| **Oct 17** | Lab (OTel Demo) if attempted, deploy, polish UI, README draft | Public URL works |
+| **Oct 18** | Freeze at 18:00, video, submit by 21:00 | Submitted |
+
+**Rule:** earned autonomy never starts before the UI and eval exit checks pass. If they slip, it waits or is cut.
+
 ### Cut order if behind
-1. Concurrency benchmark → 2. Memory-poisoning test → 3. Real Online Boutique stretch → 4. Cytoscape UI (fall back to Streamlit) → 5. B1 vector baseline.
+0. **Earned autonomy (§9b) goes first.** The project is complete without it → 1. Concurrency benchmark → 2. Memory-poisoning test → 3. Real Online Boutique stretch → 4. Cytoscape UI (fall back to Streamlit) → 5. B1 vector baseline.
 
 **Never cut:** temporal as-of queries, MCP tools, the Finding handoff between agents, the confirm-gated memory write-back, path faithfulness, the memory OFF vs ON result, B0 + B1 baselines on the test split, the failure-mode suite.
 
@@ -253,7 +267,8 @@ Work lanes, if you're a team: **A** = graph/data/eval, **B** = agents/MCP, **C**
 3. **1:20 Temporal + evidence (30 s):** the naive current-topology query gives the wrong answer; the as-of query gives the right one. Then show the checker rejecting an unsupported claim (✗ with its reason). If no real one occurred in the run, use the labeled test fixture.
 4. **1:50 Memory (45 s):** engineer clicks *Confirm*. Curator writes Cause + Lesson with provenance (show the nodes). Restart the server. A related incident arrives with memory ON: the agent recalls the lesson. Show the **real** ON-vs-OFF tool-call and accuracy numbers from the eval; don't use scripted numbers.
 5. **2:35 Safety + tenancy (25 s):** reject a wrong cause and its influence drops. Switch to the Platform tenant; there are zero Payments lessons. A no-deploy incident shows the agent abstaining instead of inventing a culprit.
-6. **3:00 Results table (20 s):** baselines vs Tracebrain, memory ON/OFF, failure-suite pass/fail, then the architecture slide and "the graph is the product: remove FalkorDB and nothing works."
+5b. **(only if §9b is built) 3:00 Earned autonomy (20 s):** the same incident type arrives again. The policy panel shows every check passing (confirmed lesson ✓, sandbox verified ✓, config change = easy to undo ✓, clear margin ✓, customers affected ✓), so Tracebrain rolls back on its own and posts the handover message with an Undo button. Then contrast with a first-time pattern, where the same panel says "needs approval: no confirmed lesson yet". The timer shows the **measured** time to mitigation.
+6. **3:00/3:20 Results table (20 s):** baselines vs Tracebrain, memory ON/OFF, failure-suite pass/fail, then the architecture slide and "the graph is the product: remove FalkorDB and nothing works."
 
 ---
 
@@ -279,6 +294,43 @@ Sources: BlackBox (DataHub Agent Hackathon 2026 Grand Prize), Data-OnCall (DataH
 **What we don't copy:** fine-tuning a model (Data-OnCall's LoRA), four different LLM providers, or a heavy Next.js command center. They cost time without strengthening our main claims.
 
 **Competition signal:** incident response with memory is a crowded idea (RecallOps, MemoryOps, OpsMind, HiveOps). What sets us apart has to be visible in the first 30 seconds: **as-of-time graph + evidence gates + verified actions**.
+
+## 9b. Earned autonomy: an add-on that strengthens the core
+
+**Idea in one line:** Tracebrain is the first responder on every alert. It always finds the cause and prepares a sandbox-checked fix. It **acts on its own only where the graph proves it is safe**; everywhere else, a human approves with one click.
+
+### Why this does not move away from the original idea
+| Concern | How the design prevents it |
+|---|---|
+| The graph gets overshadowed | Every autonomy condition is a **graph fact**: a confirmed `Lesson` (memory), a verified evidence path (faithfulness), a `Verification` node (sandbox), the deploy's `kind` (reversibility), and blast radius ∩ customer-facing services (impact). No LLM decides to act |
+| It turns into "another AIOps auto-fixer" | The headline stays *evidence-backed RCA across time*. Autonomy appears only as the payoff line and one 20 s demo beat |
+| Memory gets poisoned by automation | Long-term memory is still written **only by human review**, including after an automatic rollback. Automation can't teach itself |
+| Overclaiming | Wording rules below. Synthetic mode is labelled "simulated"; "real rollback" is claimed only if the OTel lab executor runs |
+| Time taken from never-cut work | Built only after the UI and eval exit checks pass; it's the first item on the cut list |
+
+### How it serves the two target tracks
+- **Track 01 (Agents That Act on Connected Data):** "actions based on what the graph shows" becomes literal. The decision to act is computed from graph evidence and shown check by check.
+- **Track 02 (Agent Memory and Coordination):** autonomy is **earned through memory**. A pattern becomes automatable only after an engineer confirmed it, and a rejection takes that permission away again (the lesson weakens).
+
+### What gets added (details and tasks: IMPLEMENTATION.md §14d)
+1. **Customer impact** on every incident: affected customer journeys (browse / cart / purchase), from blast radius ∩ customer-facing services.
+2. **Response timing**: started → cause found → fix verified → mitigated, recorded on the Investigation and shown as a live timer.
+3. **Autonomy policy** (deterministic, explainable). Auto-rollback only if ALL hold:
+   - top hypothesis passed the sandbox rollback check;
+   - the change is easy to undo (`config` or `flag`);
+   - a human-confirmed, non-retracted Lesson points to this service for this symptom;
+   - the evidence is solid (all top claims verified) and the score margin over #2 is clear;
+   - customers are affected;
+   - autonomy is enabled for the tenant (kill switch), at most one automatic action per incident.
+
+   Otherwise: "approval required", with the failing checks listed.
+4. **Executor + automatic undo**: simulated executor (synthetic) records a `Rollback` node; if the symptom doesn't clear, it undoes and escalates. Lab executor (real `git revert` + metric check) only if the OTel lab works.
+5. **Handover message** to the owner, built from graph facts (no LLM): cause, deploy, author, path, what was done, Undo.
+
+### Wording rules (README, video, pitch)
+- ✅ "first responder on every alert", "prepares a sandbox-verified fix", "acts on its own only for patterns an engineer has confirmed", "measured time to mitigation: X s"
+- ✅ "simulated rollback" (synthetic) / "real rollback in a live microservices lab" (only if the lab executor ran)
+- ❌ "no customer ever has a bad experience", "fixes production automatically", "self-healing infrastructure", any time-saved number we didn't measure
 
 ## 10. Rule compliance checklist
 

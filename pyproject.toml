@@ -17,10 +17,6 @@ dependencies = [
     "openai>=3.31.0",
 ]
 
-[project.optional-dependencies]
-# Local embeddings for vector recall + B1 baseline (pulls torch; install when needed).
-embed = ["sentence-transformers>=3.0"]
-
 [dependency-groups]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 

@@ -6,7 +6,7 @@ from tracebrain import db, queries
 def apply(tenant: str) -> list[str]:
     created = []
     g = db.graph_for(tenant)
-    for q in queries.INDEXES + queries.VECTOR_INDEXES:
+    for q in queries.INDEXES:
         try:
             g.query(q)
             created.append(q)

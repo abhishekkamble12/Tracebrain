@@ -27,12 +27,6 @@ INDEXES = [
     "CREATE INDEX FOR (l:Lesson) ON (l.symptom)",
 ]
 
-EMBEDDING_DIM = 384  # all-MiniLM-L6-v2
-VECTOR_INDEXES = [
-    f"CREATE VECTOR INDEX FOR (i:Incident) ON (i.embedding) OPTIONS {{dimension:{EMBEDDING_DIM}, similarityFunction:'cosine'}}",
-    f"CREATE VECTOR INDEX FOR (c:Cause) ON (c.embedding) OPTIONS {{dimension:{EMBEDDING_DIM}, similarityFunction:'cosine'}}",
-]
-
 # --------------------------------------------------------------------------- ingestion (idempotent upserts)
 
 UPSERT_SERVICES = """
@@ -106,18 +100,24 @@ RETURN s.name AS service, t.name AS team, collect(p.handle) AS people, id(r) AS 
 ORDER BY service"""
 
 # Deploys inside [t - window, t] on the failing service or anything it depends on (<= 3 hops) at t.
+# Deploys marked rolled_back (only ever set inside a sandbox copy, see verification.py) are skipped.
 SUSPECTS = f"""
 MATCH p = (f:Service {{name: $svc}})-[:DEPENDS_ON*0..3]->(s:Service)
 WHERE all(r IN relationships(p) WHERE {AS_OF})
 WITH s, p, length(p) AS len ORDER BY len
 WITH s, collect(p)[0] AS path, min(len) AS proximity
 MATCH (d:Deploy)-[dr:DEPLOYED_TO]->(s)
-WHERE d.ts <= $t AND d.ts >= $t - $window
+WHERE d.ts <= $t AND d.ts >= $t - $window AND NOT coalesce(d.rolled_back, false)
 OPTIONAL MATCH (a:Person)-[:AUTHORED]->(d)
 RETURN d.id AS deploy, s.name AS service, s.service_type AS service_type, d.ts AS ts,
        d.change_size AS change_size, d.kind AS kind, d.summary AS summary, a.handle AS author,
        proximity, [r IN relationships(path) | id(r)] + [id(dr)] AS edge_ids
 ORDER BY proximity, ts DESC"""
+
+# Time-blind variants: the same questions over ALL edges ever seen. Used only by eval/run.py to
+# measure what the as-of filter buys; never given to agents.
+NAIVE_SUSPECTS = SUSPECTS.replace(f"WHERE all(r IN relationships(p) WHERE {AS_OF})\n", "")
+NAIVE_OWNERS = OWNERS.replace(f" AND {AS_OF}", "")
 
 SHORTEST_PATH = f"""
 MATCH p = (a:Service {{name: $a}})-[:DEPENDS_ON*1..6]->(b:Service {{name: $b}})
@@ -226,7 +226,9 @@ RETURN a.id AS id"""
 HYPOTHESES = """
 MATCH (v:Investigation {id: $id})-[:PROPOSED]->(h:Hypothesis)
 OPTIONAL MATCH (h)-[:VERIFIED_BY]->(vf:Verification)
-WITH h, collect({method: vf.method, environment: vf.environment, clears: vf.clears, ts: vf.ts}) AS verifications
+WITH h, collect({method: vf.method, environment: vf.environment, clears: vf.clears, ts: vf.ts,
+                     next_suspect: vf.next_suspect, next_suspect_service: vf.next_suspect_service,
+                     remaining_candidates: vf.remaining_candidates}) AS verifications
 OPTIONAL MATCH (h)-[:ASSERTS]->(c:Claim)
 WITH h, verifications, c ORDER BY c.n
 WITH h, verifications, collect({text: c.text, edge_ids: c.edge_ids, verified: c.verified, reason: c.reason}) AS claims
@@ -237,7 +239,9 @@ ORDER BY rank"""
 ADD_VERIFICATION = """
 MATCH (h:Hypothesis {id: $hid})
 CREATE (h)-[:VERIFIED_BY]->(vf:Verification {method: $method, environment: $environment, clears: $clears,
-                                             sandbox: $sandbox, ts: $now})
+                                             sandbox: $sandbox, ts: $now, next_suspect: $next_suspect,
+                                             next_suspect_service: $next_suspect_service,
+                                             remaining_candidates: $remaining_candidates})
 RETURN vf.clears AS clears"""
 
 LIST_INVESTIGATIONS = """
@@ -254,6 +258,12 @@ WITH i, s, collect(v)[0] AS latest
 RETURN i.id AS id, i.ts AS ts, i.symptom AS symptom, i.text AS text, i.severity AS severity, i.status AS status,
        s.name AS service, latest.id AS investigation, latest.state AS investigation_state
 ORDER BY ts"""
+
+INCIDENT_BY_ID = """
+MATCH (i:Incident {id: $id})-[:AFFECTED]->(s:Service)
+RETURN i.id AS id, i.ts AS ts, i.symptom AS symptom, i.text AS text,
+       i.severity AS severity, i.status AS status, s.name AS service"""
+
 
 GRAPH_SERVICES = f"""
 MATCH (s:Service)
@@ -378,8 +388,3 @@ INCIDENT = """
 MATCH (i:Incident {id: $id})-[:TRIGGERED_BY]->(a:Alert)-[:FIRED_ON]->(s:Service)
 RETURN i.id AS id, i.ts AS ts, i.symptom AS symptom, i.text AS text, i.severity AS severity,
        i.status AS status, s.name AS service, s.service_type AS service_type"""
-
-LIST_INCIDENTS = """
-MATCH (i:Incident)-[:AFFECTED]->(s:Service)
-RETURN i.id AS id, i.ts AS ts, i.symptom AS symptom, i.status AS status, s.name AS service
-ORDER BY ts"""

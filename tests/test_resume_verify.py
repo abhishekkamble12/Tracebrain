@@ -26,7 +26,10 @@ def test_rollback_of_culprit_verifies(world):
     states = [d["state"] for k, d in events if k == "state"]
     assert states == ["TRIAGED", "HYPOTHESIZED", "VERIFIED", "AWAITING_REVIEW"]
     (h,) = episodic.hypotheses(tenant, inv_id)
-    assert h["verifications"][0]["clears"] is True and "simulated" in h["verifications"][0]["environment"]
+    v = h["verifications"][0]
+    assert v["clears"] is True and "oracle" in v["environment"]
+    # Graph counterfactual from the sandbox: the rolled-back deploy is no longer a suspect there.
+    assert v["next_suspect"] != truth["culprit_deploy"] and v["remaining_candidates"] >= 0
     # The sandbox was thrown away and the live graph was not touched.
     assert not [g for g in db.client().list_graphs() if "__sandbox_" in g and tenant in g]
     assert db.read(tenant, "MATCH (d:Deploy {id:$id}) RETURN d.rolled_back AS r",
@@ -41,7 +44,10 @@ def test_rollback_of_wrong_deploy_is_caught(world):
     events: list = []
     inv_id = run_inv(tenant, iid, Policy(truth["service"], pick=decoy), env_for(tenant, w), events)
     assert "VERIFIED" not in [d["state"] for k, d in events if k == "state"]
-    assert next(d for k, d in events if k == "verification")["clears"] is False
+    check = next(d for k, d in events if k == "verification")
+    assert check["clears"] is False
+    # With the decoy rolled back in the sandbox, the real culprit is still on the suspect list.
+    assert check["next_suspect"] is not None and check["next_suspect"] != decoy
     assert episodic.get(tenant, inv_id)["state"] == "AWAITING_REVIEW"
 
 
