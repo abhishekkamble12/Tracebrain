@@ -363,6 +363,7 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
             <TracePanel
               rows={runView.rows}
               results={stepResults}
+              cypherContext={{ t: incident?.ts, service: incident?.service, symptom: incident?.symptom }}
               onResume={handleResume}
               live={isLive}
               emptyText={

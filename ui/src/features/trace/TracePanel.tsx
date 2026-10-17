@@ -1,6 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useSelection } from '@/state/SelectionContext';
+import { CypherDrawer, type CypherContext } from './CypherDrawer';
 import type { TraceItem, TraceStep, TraceHandoff, TraceHypotheses, TraceVerification, TraceError, TraceDone, TraceWaiting } from '@/stream/reducer';
 import {
   ChevronRight,
@@ -49,7 +50,7 @@ const AGENT_COLORS: Record<string, string> = {
 
 // ─── Individual row renderers ─────────────────────────────────────────────────
 
-const StepRow: React.FC<{ item: TraceStep; result?: unknown }> = ({ item, result }) => {
+const StepRow: React.FC<{ item: TraceStep; result?: unknown; context: CypherContext }> = ({ item, result, context }) => {
   const [open, setOpen] = React.useState(false);
   const { step } = item;
   const agentColor = AGENT_COLORS[step.agent] ?? 'var(--text-faint)';
@@ -107,6 +108,14 @@ const StepRow: React.FC<{ item: TraceStep; result?: unknown }> = ({ item, result
             </span>
           )}
           {step.error && <AlertTriangle className="w-3 h-3 text-[var(--status-bad)]" />}
+          <CypherDrawer
+            tool={step.tool}
+            agent={step.agent}
+            args={step.args}
+            edgeCount={edges.length}
+            context={context}
+            onOpen={() => edges.length > 0 && pinEdges(edges)}
+          />
         </div>
         {/* Expand button */}
         <button
@@ -290,13 +299,15 @@ interface TracePanelProps {
   rows: TraceItem[];
   /** Stored tool results by step number (live SSE steps carry no result). */
   results?: Map<number, unknown>;
+  /** Incident context for filling query parameters in the Cypher drawer. */
+  cypherContext?: CypherContext;
   onResume?: () => void;
   /** A run is in progress (shows a spinner in the empty state). */
   live?: boolean;
   emptyText?: string;
 }
 
-export const TracePanel: React.FC<TracePanelProps> = ({ rows, results, onResume, live = false, emptyText }) => {
+export const TracePanel: React.FC<TracePanelProps> = ({ rows, results, cypherContext = {}, onResume, live = false, emptyText }) => {
   const bottomRef = React.useRef<HTMLDivElement>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = React.useState(true);
@@ -359,7 +370,7 @@ export const TracePanel: React.FC<TracePanelProps> = ({ rows, results, onResume,
                 </div>
               );
             case 'step':
-              return <StepRow key={key} item={item} result={results?.get(item.step.n)} />;
+              return <StepRow key={key} item={item} result={results?.get(item.step.n)} context={cypherContext} />;
             case 'handoff':
               return <HandoffCard key={key} item={item} />;
             case 'fallback':
