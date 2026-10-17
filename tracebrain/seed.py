@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-from tracebrain import schema
+from tracebrain import db, schema
 from tracebrain.connectors.synthetic import TENANTS, SyntheticConnector, leakage_violations
 from tracebrain.ingest import ingest
 
@@ -39,6 +39,10 @@ def main() -> int:
     ap.add_argument("--tenants", default=",".join(TENANTS))
     ap.add_argument("--reset", action="store_true", help="drop the tenant graphs first")
     args = ap.parse_args()
+    try:
+        db.ping()
+    except Exception as e:
+        raise SystemExit(f"Can't seed: {e}")
     seed([t for t in args.tenants.split(",") if t], args.reset)
     return 0
 

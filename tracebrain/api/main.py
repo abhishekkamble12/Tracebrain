@@ -99,7 +99,14 @@ def health() -> dict:
         providers = [p.name for p in llm.available_providers()]
     except RuntimeError:
         pass
-    return {"falkordb": db.ping(), "llm_providers": providers, "running": len(_tasks)}
+    try:
+        falkordb, error = db.ping(), None
+    except Exception as e:  # unreachable, or a plain Redis on that port
+        falkordb, error = False, str(e)
+    out = {"falkordb": falkordb, "llm_providers": providers, "running": len(_tasks)}
+    if error:
+        out["falkordb_error"] = error
+    return out
 
 
 @app.get("/results")

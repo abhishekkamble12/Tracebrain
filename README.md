@@ -229,7 +229,21 @@ uv run uvicorn tracebrain.api.main:app --port 8000   # API docs at http://localh
 cd ui && npm install && npm run dev      # http://localhost:5173 (set TRACEBRAIN_API_URL if the API isn't on :8000)
 ```
 
-If port 6379 or 3000 is already in use, change the host side of the port mapping in `docker-compose.yml` and set `FALKOR_PORT` in `.env` to match.
+If port 6379 or 3000 is already in use (for example by another Redis), set `FALKOR_PORT` / `FALKOR_BROWSER_PORT` in `.env`: `docker-compose.yml` publishes FalkorDB on those ports and the app connects to the same `FALKOR_PORT`. Pointing Tracebrain at a plain Redis fails with a clear "without the FalkorDB graph module" message.
+
+**Windows (PowerShell).** `&&`, `export` and `VAR=value cmd` are bash syntax and fail in Windows PowerShell. Use the launcher, which starts FalkorDB, seeds if needed, and opens the API (:8010) and UI (:5180) in their own windows:
+```powershell
+copy .env.example .env      # then add GROQ_API_KEY; set FALKOR_PORT if 6379 is taken
+uv sync
+powershell -ExecutionPolicy Bypass -File scriptsun-local.ps1          # -Reset for fresh data and empty memory
+```
+Or by hand, one command per line:
+```powershell
+docker compose up -d
+uv run python -m tracebrain.seed --reset
+uv run uvicorn tracebrain.api.main:app --port 8010                      # terminal 1
+cd ui; $env:TRACEBRAIN_API_URL = "http://localhost:8010"; npx vite --port 5180   # terminal 2
+```
 
 Other entry points:
 ```bash

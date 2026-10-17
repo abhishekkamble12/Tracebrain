@@ -4,6 +4,7 @@ from functools import lru_cache
 from typing import Any
 
 from falkordb import FalkorDB, Graph
+from redis.exceptions import ResponseError
 
 from tracebrain import config
 
@@ -41,5 +42,22 @@ def write(tenant: str, query: str, params: dict | None = None) -> list[dict[str,
     return rows(graph_for(tenant).query(query, params))
 
 
+class NotFalkorDB(RuntimeError):
+    """The configured server answers but has no graph module (usually another Redis on that port)."""
+
+
 def ping() -> bool:
-    return bool(client().connection.ping())
+    """True when FalkorDB answers. Raises NotFalkorDB for a plain Redis, so callers fail with a clear
+    message instead of 'unknown command GRAPH.*' deep inside a query."""
+    c = client()
+    c.connection.ping()
+    try:
+        c.list_graphs()
+    except ResponseError as e:
+        if "unknown command" in str(e).lower():
+            raise NotFalkorDB(
+                f"{config.FALKOR_HOST}:{config.FALKOR_PORT} is a Redis server without the FalkorDB graph module "
+                "(another Redis on that port?). Start FalkorDB with `docker compose up -d` and set FALKOR_PORT "
+                "in .env to the port it publishes.") from e
+        raise
+    return True
