@@ -1,0 +1,132 @@
+{
+ "generated_at": "2026-10-17 20:42:19 +0530",
+ "commit": "c7b061c",
+ "dataset": {
+  "tenants": 2,
+  "incidents": 52,
+  "with_culprit_deploy": 48,
+  "no_deploy_at_fault": 4,
+  "llm_calls": 0
+ },
+ "ranking_all_incidents": {
+  "latest_anywhere": {
+   "incidents": 48,
+   "top1": 7,
+   "top3": 44,
+   "top1_rate": 0.146,
+   "mrr": 0.5,
+   "culprit_never_ranked": 0
+  },
+  "latest_on_alerted_service": {
+   "incidents": 48,
+   "top1": 13,
+   "top3": 24,
+   "top1_rate": 0.271,
+   "mrr": 0.385,
+   "culprit_never_ranked": 24
+  },
+  "largest_change": {
+   "incidents": 48,
+   "top1": 4,
+   "top3": 23,
+   "top1_rate": 0.083,
+   "mrr": 0.354,
+   "culprit_never_ranked": 0
+  },
+  "graph_time_blind": {
+   "incidents": 48,
+   "top1": 19,
+   "top3": 44,
+   "top1_rate": 0.396,
+   "mrr": 0.642,
+   "culprit_never_ranked": 0
+  },
+  "graph_as_of": {
+   "incidents": 48,
+   "top1": 22,
+   "top3": 47,
+   "top1_rate": 0.458,
+   "mrr": 0.693,
+   "culprit_never_ranked": 0
+  },
+  "graph_as_of_with_memory": {
+   "incidents": 48,
+   "top1": 30,
+   "top3": 48,
+   "top1_rate": 0.625,
+   "mrr": 0.795,
+   "culprit_never_ranked": 0
+  }
+ },
+ "ranking_repeat_incidents_only": {
+  "latest_anywhere": {
+   "incidents": 36,
+   "top1": 5,
+   "top3": 33,
+   "top1_rate": 0.139,
+   "mrr": 0.488,
+   "culprit_never_ranked": 0
+  },
+  "latest_on_alerted_service": {
+   "incidents": 36,
+   "top1": 9,
+   "top3": 18,
+   "top1_rate": 0.25,
+   "mrr": 0.375,
+   "culprit_never_ranked": 18
+  },
+  "largest_change": {
+   "incidents": 36,
+   "top1": 3,
+   "top3": 16,
+   "top1_rate": 0.083,
+   "mrr": 0.349,
+   "culprit_never_ranked": 0
+  },
+  "graph_time_blind": {
+   "incidents": 36,
+   "top1": 14,
+   "top3": 33,
+   "top1_rate": 0.389,
+   "mrr": 0.637,
+   "culprit_never_ranked": 0
+  },
+  "graph_as_of": {
+   "incidents": 36,
+   "top1": 17,
+   "top3": 35,
+   "top1_rate": 0.472,
+   "mrr": 0.697,
+   "culprit_never_ranked": 0
+  },
+  "graph_as_of_with_memory": {
+   "incidents": 36,
+   "top1": 25,
+   "top3": 36,
+   "top1_rate": 0.694,
+   "mrr": 0.833,
+   "culprit_never_ranked": 0
+  }
+ },
+ "time_awareness": {
+  "incidents_with_stale_dependency_decoy": 21,
+  "time_blind_ranks_stale_decoy_first": 5,
+  "as_of_top1_on_those": 9,
+  "time_blind_top1_on_those": 6,
+  "time_blind_ranks_culprit_lower": 10,
+  "time_blind_ranks_culprit_higher": 0,
+  "incidents_where_owner_lookup_differs": 8,
+  "incidents_where_blast_radius_differs": 0
+ },
+ "candidate_narrowing": {
+  "mean_deploys_in_window": 4.9,
+  "mean_time_blind_candidates": 3.54,
+  "mean_as_of_candidates": 3.06
+ },
+ "abstention": {
+  "no_deploy_incidents": 4,
+  "as_of_graph_returns_no_suspects": 4,
+  "time_blind_graph_returns_no_suspects": 4
+ },
+ "runtime_s": 2.9
+}
