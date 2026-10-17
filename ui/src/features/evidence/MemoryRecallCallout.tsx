@@ -8,10 +8,12 @@ interface MemoryRecallCalloutProps {
   recall: MemoryRecall;
   memoryEnabled?: boolean | null;
   top?: Hypothesis;
+  /** This run itself was confirmed by a reviewer (its lesson now exists). */
+  confirmed?: boolean;
 }
 
 /** Shows which confirmed memory this run used, and where it came from (Track 2: memory reused). */
-export const MemoryRecallCallout: React.FC<MemoryRecallCalloutProps> = ({ recall, memoryEnabled, top }) => {
+export const MemoryRecallCallout: React.FC<MemoryRecallCalloutProps> = ({ recall, memoryEnabled, top, confirmed }) => {
   const { tenant = 'payments' } = useParams<{ tenant: string }>();
   const boost = typeof top?.features?.lesson_match === 'number' ? top.features.lesson_match : 0;
   const used = recall.lessons.length > 0 || recall.similar.length > 0 || boost > 0;
@@ -29,7 +31,9 @@ export const MemoryRecallCallout: React.FC<MemoryRecallCalloutProps> = ({ recall
     return (
       <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-card)] text-[12px] text-[var(--text-secondary)]">
         <Brain className="w-4 h-4 text-[var(--agent-curator)] flex-shrink-0" />
-        Memory checked: nothing confirmed yet for this symptom. Confirming this run will teach it.
+        {confirmed
+          ? 'Memory had nothing for this symptom before this run. The run was confirmed, so it is now a lesson.'
+          : 'Memory checked: nothing confirmed yet for this symptom. Confirming this run will teach it.'}
       </div>
     );
   }

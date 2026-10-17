@@ -358,7 +358,7 @@ export const TracePanel: React.FC<TracePanelProps> = ({ rows, results, cypherCon
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-2 py-2 flex flex-col gap-1"
+        className="flex-1 overflow-y-auto px-2 py-2 flex flex-col gap-1 [&>*]:shrink-0"
       >
         {rows.map((item, i) => {
           const key = `${item.kind}-${item.seq}-${i}`;

@@ -116,7 +116,7 @@ export const CypherDrawer: React.FC<CypherDrawerProps> = ({ tool, agent, args, e
             </Dialog.Close>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
+          <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5 [&>*]:shrink-0">
             {queries.map(({ name, role }) => {
               const query = CYPHER[name] ?? '';
               return (

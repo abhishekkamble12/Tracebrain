@@ -4,6 +4,7 @@ import { useSelection } from '@/state/SelectionContext';
 import type { HypothesesPayload } from '@/stream/reducer';
 import type { Hypothesis, Claim, Features } from '@/api/types';
 import type { MemoryRecall } from '@/lib/memoryRecall';
+import type { VerificationPayload } from '@/stream/reducer';
 import { MemoryRecallCallout } from './MemoryRecallCallout';
 import { CheckCircle2, XCircle, HelpCircle, Brain, ChevronDown, ChevronRight, ExternalLink, Sparkles } from 'lucide-react';
 
@@ -159,9 +160,17 @@ interface HypothesisCardProps {
   isFocused: boolean;
   onFocus: () => void;
   onBlur: () => void;
+  /** What the sandbox rollback check says about this deploy, if anything. */
+  check?: 'cleared' | 'not_cleared' | 'next' | null;
 }
 
-export const HypothesisCard: React.FC<HypothesisCardProps> = ({ hyp, isFocused, onFocus, onBlur }) => {
+const CHECK_BADGE = {
+  cleared: { text: 'rollback clears (simulated)', cls: 'text-[var(--status-ok)] border-[var(--status-ok)]/40 bg-[var(--status-ok)]/10' },
+  not_cleared: { text: "rollback didn't clear", cls: 'text-[var(--status-bad)] border-[var(--status-bad)]/40 bg-[var(--status-bad)]/10' },
+  next: { text: 'next suspect after rollback', cls: 'text-[var(--status-warn)] border-[var(--status-warn)]/40 bg-[var(--status-warn)]/10' },
+} as const;
+
+export const HypothesisCard: React.FC<HypothesisCardProps> = ({ hyp, isFocused, onFocus, onBlur, check }) => {
   const [open, setOpen] = React.useState(true);
   const { setHoveredClaimEdgeIds, pinEdges, clearPinnedEdges } = useSelection();
 
@@ -241,6 +250,11 @@ export const HypothesisCard: React.FC<HypothesisCardProps> = ({ hyp, isFocused, 
             {refuted > 0 && <span className="text-[var(--status-bad)] font-medium">{refuted} refuted</span>}
             {pending > 0 && <span className="text-[var(--text-faint)]">{pending} pending</span>}
           </div>
+          {check && (
+            <span className={cn('inline-block mt-1.5 px-1.5 py-0.5 rounded border text-[10px] font-medium', CHECK_BADGE[check].cls)}>
+              {CHECK_BADGE[check].text}
+            </span>
+          )}
         </div>
 
         <span className="flex-shrink-0 text-[var(--text-faint)] mt-1">
@@ -320,6 +334,8 @@ interface EvidencePanelProps {
   /** Memory this run recalled (from its stored recall_* steps). */
   recall?: MemoryRecall;
   memoryEnabled?: boolean | null;
+  /** Sandbox rollback check of the top hypothesis. */
+  verification?: VerificationPayload | null;
 }
 
 export const EvidencePanel: React.FC<EvidencePanelProps> = ({
@@ -329,6 +345,7 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
   invOutcome,
   recall,
   memoryEnabled,
+  verification,
 }) => {
   const { focusedHypothesisRank, setFocusedHypothesis } = useSelection();
 
@@ -386,9 +403,14 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
       )}
 
       {/* Hypothesis cards */}
-      <div className="flex-1 overflow-y-auto p-2.5 flex flex-col gap-2.5">
+      <div className="flex-1 overflow-y-auto p-2.5 flex flex-col gap-2.5 [&>*]:shrink-0">
         {recall && (
-          <MemoryRecallCallout recall={recall} memoryEnabled={memoryEnabled} top={h.hypotheses[0]} />
+          <MemoryRecallCallout
+            recall={recall}
+            memoryEnabled={memoryEnabled}
+            top={h.hypotheses[0]}
+            confirmed={invOutcome === 'confirmed'}
+          />
         )}
         {h.hypotheses.map((hyp) => (
           <HypothesisCard
@@ -397,6 +419,11 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
             isFocused={focusedHypothesisRank === hyp.rank}
             onFocus={() => setFocusedHypothesis(hyp.rank)}
             onBlur={() => setFocusedHypothesis(null)}
+            check={
+              verification?.deploy_id === hyp.deploy_id
+                ? verification.clears === true ? 'cleared' : verification.clears === false ? 'not_cleared' : null
+                : verification?.clears === false && verification.next_suspect === hyp.deploy_id ? 'next' : null
+            }
           />
         ))}
       </div>

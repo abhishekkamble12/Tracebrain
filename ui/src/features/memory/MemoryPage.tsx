@@ -242,7 +242,7 @@ export const MemoryPage: React.FC = () => {
   const retractedLessons = mem?.lessons?.filter((l) => l.retracted) ?? [];
 
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-y-auto max-w-6xl mx-auto w-full gap-6">
+    <div className="flex-1 flex flex-col p-6 overflow-y-auto max-w-6xl mx-auto w-full gap-6 [&>*]:shrink-0">
       {/* Header */}
       <header className="flex flex-col gap-1 border-b border-[var(--border-subtle)] pb-4">
         <div className="flex items-center justify-between">

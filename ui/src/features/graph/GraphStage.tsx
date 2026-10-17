@@ -6,6 +6,7 @@ import {
   Controls,
   MarkerType,
   useReactFlow,
+  useStore,
   type Node,
   type Edge,
 } from '@xyflow/react';
@@ -270,7 +271,8 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
     for (const e of deployEdges) {
       if (!shownDeploys.has(e.source)) continue;
       const s = style(e.id, { stroke: COLOR.edge, width: 1, dash: '3 3' });
-      const { drawStyle, ...label } = pathDecor(e.id, !s.dash);
+      // Deploy edges are short and stacked: a hop badge would sit on the deploy pill, so draw without one.
+      const { drawStyle } = pathDecor(e.id, !s.dash);
       edges.push({
         id: String(e.id),
         source: e.source,
@@ -278,7 +280,6 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
         targetHandle: 'deploy-in',
         type: 'straight',
         zIndex: s.z,
-        ...label,
         style: { stroke: s.stroke, strokeWidth: s.width, strokeDasharray: s.dash, opacity: spotlight && s.z === 0 ? 0.25 : 1, ...drawStyle },
       });
     }
@@ -319,7 +320,7 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
           elementsSelectable={false}
           fitView
           fitViewOptions={{ padding: 0.05 }}
-          minZoom={0.5}
+          minZoom={0.3}
           maxZoom={1.75}
           proOptions={{ hideAttribution: true }}
           style={{ background: 'var(--bg-deep)' }}
@@ -338,10 +339,12 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
 /** Re-fit when nodes appear or disappear (deploys arrive, tenant changes); not on highlight changes. */
 const FitOnTopologyChange: React.FC<{ nodeIds: string }> = ({ nodeIds }) => {
   const { fitView } = useReactFlow();
+  // Also refit when the pane changes size (window resize, browser zoom), or nodes end up off-screen.
+  const paneSize = useStore((s) => `${Math.round(s.width)}x${Math.round(s.height)}`);
   useEffect(() => {
     const id = requestAnimationFrame(() => void fitView({ padding: 0.05, duration: 200 }));
     return () => cancelAnimationFrame(id);
-  }, [nodeIds, fitView]);
+  }, [nodeIds, paneSize, fitView]);
   return null;
 };
 

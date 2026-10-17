@@ -92,7 +92,7 @@ export const ActionsPanel: React.FC<ActionsPanelProps> = ({ actions = [], verifi
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto p-3 gap-3">
+    <div className="flex-1 flex flex-col overflow-y-auto p-3 gap-3 [&>*]:shrink-0">
       <div className="flex items-start gap-2 p-2.5 rounded-md bg-[var(--surface-card)] border border-[var(--border-subtle)] text-[11px] leading-snug text-[var(--text-secondary)]">
         <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-[var(--accent)]" />
         <span>

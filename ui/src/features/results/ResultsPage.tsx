@@ -115,7 +115,7 @@ export const ResultsPage: React.FC = () => {
   const sections = results ? Object.entries(results).filter(([k]) => !META_KEYS.includes(k)) : [];
 
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-y-auto max-w-6xl mx-auto w-full gap-6">
+    <div className="flex-1 flex flex-col p-6 overflow-y-auto max-w-6xl mx-auto w-full gap-6 [&>*]:shrink-0">
       <header className="flex flex-col gap-1 border-b border-[var(--border-subtle)] pb-4">
         <div className="flex items-center gap-2.5">
           <BarChart3 className="w-5 h-5 text-[var(--accent)]" />

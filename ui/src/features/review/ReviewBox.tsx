@@ -1,6 +1,7 @@
 import React from 'react';
 import { useReview } from '@/api/hooks';
 import type { Hypothesis, InvestigationState } from '@/api/types';
+import type { VerificationPayload } from '@/stream/reducer';
 import {
   CheckCircle2,
   XCircle,
@@ -20,6 +21,8 @@ interface ReviewBoxProps {
   /** Investigation outcome; tells a confirmed LEARNED run from a rejected one. */
   outcome?: string | null;
   hypotheses?: Hypothesis[];
+  /** Sandbox rollback check of the top hypothesis (guides the default selection). */
+  verification?: VerificationPayload | null;
   onReviewed?: () => void;
 }
 
@@ -29,6 +32,7 @@ export const ReviewBox: React.FC<ReviewBoxProps> = ({
   state,
   outcome,
   hypotheses = [],
+  verification,
   onReviewed,
 }) => {
   // The reviewer is recorded as provenance on the cause link, so it is never defaulted to a made-up name.
@@ -48,15 +52,24 @@ export const ReviewBox: React.FC<ReviewBoxProps> = ({
     return hypotheses[0]?.likely_cause || '';
   });
 
-  // Keep synced if hypotheses change and nothing typed yet
+  // Default pick: #1, unless rolling #1 back did not clear the symptom and the sandbox's next suspect
+  // is among the hypotheses. Never overrides a choice the reviewer made.
+  const picked = React.useRef(false);
+  const suggested =
+    verification?.clears === false && hypotheses.some((h) => h.deploy_id === verification.next_suspect)
+      ? hypotheses.find((h) => h.deploy_id === verification.next_suspect)
+      : undefined;
   React.useEffect(() => {
-    if (hypotheses.length > 0 && !selectedDeployId) {
-      setSelectedDeployId(hypotheses[0].deploy_id);
-      setCauseText(hypotheses[0].likely_cause || '');
+    if (picked.current || hypotheses.length === 0) return;
+    const h = suggested ?? hypotheses[0];
+    if (h.deploy_id !== selectedDeployId) {
+      setSelectedDeployId(h.deploy_id);
+      setCauseText(h.likely_cause || '');
     }
-  }, [hypotheses, selectedDeployId]);
+  }, [hypotheses, suggested, selectedDeployId]);
 
   const handleSelectHypothesis = (depId: string) => {
+    picked.current = true;
     setSelectedDeployId(depId);
     const found = hypotheses.find((h) => h.deploy_id === depId);
     if (found?.likely_cause) {
@@ -91,7 +104,7 @@ export const ReviewBox: React.FC<ReviewBoxProps> = ({
       if (verdict === 'confirm') {
         toast.success(`Confirmed ${res.deploy_id ?? ''} · lesson saved`, {
           description: [
-            res.cause_key && `${res.cause_is_new ? 'New cause' : 'Matched existing cause'} "${res.cause_key}"`,
+            res.cause_key && `${res.cause_is_new ? 'New cause' : 'Matched existing cause'} "${res.cause_key.replace(/_/g, ' ')}"`,
             typeof res.confidence === 'number' && `confidence ${(res.confidence * 100).toFixed(0)}%`,
             res.lesson && `lesson ✓${res.lesson.success_count} ✗${res.lesson.fail_count}`,
             res.top_was_right === false && weakened > 0 && `#1 was wrong: ${weakened} lesson${weakened > 1 ? 's' : ''} weakened`,
@@ -177,6 +190,24 @@ export const ReviewBox: React.FC<ReviewBoxProps> = ({
           </span>
         )}
       </div>
+
+      {/* Why the default pick is what it is */}
+      {verification && hypotheses.length > 0 && verification.clears !== null && verification.clears !== undefined && (
+        <p
+          className={
+            'text-[11px] leading-relaxed px-2 py-1.5 rounded border ' +
+            (verification.clears
+              ? 'text-[var(--status-ok)] border-[var(--status-ok)]/30 bg-[var(--status-ok)]/5'
+              : 'text-[var(--status-warn)] border-[var(--status-warn)]/30 bg-[var(--status-warn)]/5')
+          }
+        >
+          {verification.clears
+            ? `Sandbox check: rolling back ${verification.deploy_id} clears the symptom (simulated).`
+            : suggested
+              ? `Sandbox check: rolling back ${verification.deploy_id} did not clear the symptom, so the next suspect ${suggested.deploy_id} (#${suggested.rank}) is preselected. Change it if you know better.`
+              : `Sandbox check: rolling back ${verification.deploy_id} did not clear the symptom. Check before confirming.`}
+        </p>
+      )}
 
       {/* Culprit Selector */}
       {hypotheses.length > 0 && (

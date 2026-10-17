@@ -36,7 +36,7 @@ def tokens(text: str) -> list[str]:
     out: list[str] = []
     for raw in re.findall(r"[a-z0-9+]+", text):
         for tok in SYNONYMS.get(raw, raw).split():
-            if len(tok) > 3 and tok.endswith("s") and not tok.endswith("ss"):
+            if len(tok) > 3 and tok.endswith("s") and not tok.endswith(("ss", "is", "us")):
                 tok = tok[:-1]
             if tok not in STOPWORDS:
                 out.append(tok)

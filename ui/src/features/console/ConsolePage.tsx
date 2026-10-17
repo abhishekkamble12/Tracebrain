@@ -396,6 +396,7 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
               invOutcome={inv?.outcome}
               recall={recall}
               memoryEnabled={inv?.memory_enabled}
+              verification={topVerification}
             />
           )}
           {activeTab === 'actions' && (
@@ -415,6 +416,7 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
             state={invState}
             outcome={inv?.outcome}
             hypotheses={runView.hypotheses?.hypotheses ?? inv?.hypotheses}
+            verification={topVerification}
             onReviewed={() => {
               void refetchInv();
             }}
