@@ -1,5 +1,7 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/api/keys';
 import { useIncidents, useInvestigation, useStartInvestigation } from '@/api/hooks';
 import { IncidentRail } from '@/features/incidents/IncidentRail';
 import { TracePanel } from '@/features/trace/TracePanel';
@@ -76,12 +78,14 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
     epoch: streamEpoch,
   });
 
-  // Invalidate on done/reviewed
+  // Invalidate on done/reviewed (the incident rail too, so its "running" footer clears right away)
+  const queryClient = useQueryClient();
   React.useEffect(() => {
     if (runView.connection === 'closed' && runView.rows.some((r) => r.kind === 'done')) {
       void refetchInv();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.incidents(tenant) });
     }
-  }, [runView.connection, runView.rows, refetchInv]);
+  }, [runView.connection, runView.rows, refetchInv, queryClient, tenant]);
 
   const startMutation = useStartInvestigation(tenant);
 
