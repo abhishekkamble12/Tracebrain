@@ -1,0 +1,50 @@
+:root {
+  /* Surfaces & Canvas */
+  --bg-deep: #07090E;
+  --bg-canvas: #0B0E14;
+  --surface-panel: #11151F;
+  --surface-card: #161C2A;
+  --surface-hover: #1D2436;
+  --surface-glass: rgba(17, 21, 31, 0.75);
+
+  /* Hairlines & Borders */
+  --border-subtle: #1C2333;
+  --border-strong: #2A344C;
+  --border-focus: #7C8CFF;
+
+  /* Typography Scale */
+  --text-primary: #F1F4FA;
+  --text-secondary: #9DA8BE;
+  --text-faint: #67748E;
+  --text-inverse: #07090E;
+
+  /* Accent & Core Brand */
+  --accent: #7C8CFF;
+  --accent-glow: rgba(124, 140, 255, 0.15);
+
+  /* Evidence & Investigation Status */
+  --status-ok: #2DD4BF;
+  --status-bad: #F43F5E;
+  --status-warn: #F59E0B;
+  --status-suspect: #FB923C;
+
+  /* Multi-Agent Color Identities */
+  --agent-triage: #38BDF8;
+  --agent-investigator: #A855F7;
+  --agent-curator: #10B981;
+  --agent-orchestrator: #94A3B8;
+
+  /* Canvas Graph Elements */
+  --graph-grid: rgba(42, 52, 76, 0.25);
+  --edge-default: #2A344C;
+  --edge-active: #7C8CFF;
+  --edge-cited: #FB923C;
+  --edge-cited-hover: rgba(251, 146, 60, 0.6);
+
+  /* Graph Node Tokens */
+  --node-bg: var(--surface-card);
+  --node-blast-low:  #F59E0B;
+  --node-blast-mid:  #FB923C;
+  --node-blast-high: #F43F5E;
+  --node-suspect: var(--status-suspect);
+}
