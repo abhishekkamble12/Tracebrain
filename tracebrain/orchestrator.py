@@ -239,7 +239,12 @@ def _verify(inv: Investigation, inc: dict, env: verification.Environment | None)
         if top["verifications"]:  # already verified before an interruption
             result = {"deploy_id": top["deploy_id"], **top["verifications"][0]}
         else:
-            result = verification.verify_rollback(inv.tenant, inc["id"], top["id"], top["deploy_id"], env)
+            try:
+                result = verification.verify_rollback(inv.tenant, inc["id"], top["id"], top["deploy_id"], env)
+            except Exception as e:  # the check is advisory: never lose a finished investigation over it
+                log.warning("rollback check failed for %s: %s", inv.inv_id, e)
+                result = {"deploy_id": top["deploy_id"], "clears": None, "environment": env.name,
+                          "error": describe_error(e)}
         inv.emit("verification", result)
         if result["clears"]:
             inv.move("VERIFIED")

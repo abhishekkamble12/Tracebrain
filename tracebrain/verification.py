@@ -64,7 +64,14 @@ def verify_rollback(tenant: str, incident_id: str, hypothesis_id: str, deploy_id
 
     suffix = f"__sandbox_{uuid.uuid4().hex[:6]}"
     sandbox = f"{db.graph_name(tenant)}{suffix}"
-    db.graph_for(tenant).copy(sandbox)
+    for attempt in range(3):  # GRAPH.COPY forks the server; a concurrent fork can fail transiently
+        try:
+            db.graph_for(tenant).copy(sandbox)
+            break
+        except Exception:
+            if attempt == 2:
+                raise
+            time.sleep(0.5 * (attempt + 1))
     try:
         db.write(tenant + suffix, "MATCH (d:Deploy {id: $id}) SET d.rolled_back = true", {"id": deploy_id})
         inc = impl.get_incident(impl.ToolCtx(tenant + suffix, 0), incident_id)

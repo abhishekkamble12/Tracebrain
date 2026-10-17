@@ -117,3 +117,20 @@ def test_run_on_finished_investigation_is_a_no_op(world):
     n = len(episodic.steps(tenant, inv_id))
     assert anyio.run(lambda: orchestrator.run(tenant, inv_id, chat_fn=Policy(truth["service"]))) == "AWAITING_REVIEW"
     assert len(episodic.steps(tenant, inv_id)) == n
+
+
+def test_failed_rollback_check_does_not_fail_the_investigation(world, monkeypatch):
+    """A sandbox error (e.g. GRAPH.COPY could not fork) is reported, and the run still reaches review."""
+    from tracebrain import verification
+
+    def boom(*_a, **_k):
+        raise RuntimeError("GRAPH.COPY failed, could not fork")
+
+    monkeypatch.setattr(verification, "verify_rollback", boom)
+    tenant, w = world
+    iid, truth = incidents_of(w, "timeout")[0]
+    events: list = []
+    inv_id = run_inv(tenant, iid, Policy(truth["service"], pick=truth["culprit_deploy"]), env_for(tenant, w), events)
+    assert episodic.get(tenant, inv_id)["state"] == "AWAITING_REVIEW"
+    check = next(d for k, d in events if k == "verification")
+    assert check["clears"] is None and "could not fork" in check["error"]
