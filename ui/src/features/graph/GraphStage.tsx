@@ -13,7 +13,16 @@ import '@xyflow/react/dist/style.css';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { ServiceNode, type ServiceNodeData } from './ServiceNode';
 import { DeployNode, type DeployNodeData } from './DeployNode';
-import { getServicePosition, getDeployPosition, MAX_DEPLOYS_PER_SERVICE, SERVICE_POSITIONS } from './layout';
+import {
+  getServicePosition,
+  getDeployPosition,
+  MAX_DEPLOYS_PER_SERVICE,
+  SERVICE_POSITIONS,
+  SERVICE_NODE_W,
+  SERVICE_NODE_H,
+  DEPLOY_NODE_W,
+  DEPLOY_NODE_H,
+} from './layout';
 import type { RunView } from '@/stream/reducer';
 import type {
   GraphEdge,
@@ -130,7 +139,10 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
         touched: touched.has(s.name),
         dimmed: dim(s.name),
       };
-      nodes.push({ id: s.name, type: 'service', position: pos, data: data as unknown as Record<string, unknown> });
+      // Explicit size: these nodes are rebuilt on every event, and React Flow 12 hides a node it
+      // considers unmeasured (the whole graph went blank when a run finished).
+      nodes.push({ id: s.name, type: 'service', position: pos, width: SERVICE_NODE_W, height: SERVICE_NODE_H,
+                   data: data as unknown as Record<string, unknown> });
     }
 
     // Deploys: ranked first, then most recent; at most MAX_DEPLOYS_PER_SERVICE per service
@@ -151,13 +163,16 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
           clears: clearsByDeploy.get(d.id),
           dimmed: dim(d.id),
         };
-        nodes.push({ id: d.id, type: 'deploy', position: getDeployPosition(svcPos, i), data: data as unknown as Record<string, unknown> });
+        nodes.push({ id: d.id, type: 'deploy', position: getDeployPosition(svcPos, i), width: DEPLOY_NODE_W,
+                     height: DEPLOY_NODE_H, data: data as unknown as Record<string, unknown> });
       });
       if (list.length > MAX_DEPLOYS_PER_SERVICE) {
         nodes.push({
           id: `${svc}:more`,
           type: 'deploy',
           position: getDeployPosition(svcPos, MAX_DEPLOYS_PER_SERVICE),
+          width: DEPLOY_NODE_W,
+          height: 16,
           data: { deployId: '', more: list.length - MAX_DEPLOYS_PER_SERVICE } as unknown as Record<string, unknown>,
           selectable: false,
         });
