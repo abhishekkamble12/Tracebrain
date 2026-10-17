@@ -3,6 +3,8 @@ import { cn } from '@/lib/utils';
 import { useSelection } from '@/state/SelectionContext';
 import type { HypothesesPayload } from '@/stream/reducer';
 import type { Hypothesis, Claim, Features } from '@/api/types';
+import type { MemoryRecall } from '@/lib/memoryRecall';
+import { MemoryRecallCallout } from './MemoryRecallCallout';
 import { CheckCircle2, XCircle, HelpCircle, Brain, ChevronDown, ChevronRight, ExternalLink, Sparkles } from 'lucide-react';
 
 // ─── FaithfulnessMeter ───────────────────────────────────────────────────────
@@ -315,6 +317,9 @@ interface EvidencePanelProps {
   invHypotheses?: Hypothesis[];
   invFaithfulness?: number | null;
   invOutcome?: string | null;
+  /** Memory this run recalled (from its stored recall_* steps). */
+  recall?: MemoryRecall;
+  memoryEnabled?: boolean | null;
 }
 
 export const EvidencePanel: React.FC<EvidencePanelProps> = ({
@@ -322,6 +327,8 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
   invHypotheses,
   invFaithfulness,
   invOutcome,
+  recall,
+  memoryEnabled,
 }) => {
   const { focusedHypothesisRank, setFocusedHypothesis } = useSelection();
 
@@ -380,6 +387,9 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
 
       {/* Hypothesis cards */}
       <div className="flex-1 overflow-y-auto p-2.5 flex flex-col gap-2.5">
+        {recall && (
+          <MemoryRecallCallout recall={recall} memoryEnabled={memoryEnabled} top={h.hypotheses[0]} />
+        )}
         {h.hypotheses.map((hyp) => (
           <HypothesisCard
             key={hyp.rank}

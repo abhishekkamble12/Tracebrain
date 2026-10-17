@@ -1,6 +1,7 @@
 import React from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
+import { Brain } from 'lucide-react';
 import { SERVICE_NODE_H, SERVICE_NODE_W } from './layout';
 
 export interface ServiceNodeData {
@@ -16,6 +17,8 @@ export interface ServiceNodeData {
   touched?: boolean;
   /** Off the highlighted path. */
   dimmed?: boolean;
+  /** Recalled memory (a lesson or a confirmed precedent) points at this service. */
+  recalled?: boolean;
 }
 
 export const ServiceNode: React.FC<NodeProps> = ({ data }) => {
@@ -43,6 +46,17 @@ export const ServiceNode: React.FC<NodeProps> = ({ data }) => {
 
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="font-mono text-[16px] font-semibold text-[var(--text-primary)] truncate">{d.name}</span>
+        {d.recalled && (
+          <span
+            className={cn(
+              'flex-shrink-0 flex items-center gap-0.5 px-1 rounded text-[11px] bg-[var(--agent-curator)]/20 text-[var(--agent-curator)] font-medium',
+              !d.alerted && !inBlast && 'ml-auto'
+            )}
+            title="A confirmed lesson or past incident points here"
+          >
+            <Brain className="w-3 h-3" /> lesson
+          </span>
+        )}
         {d.alerted && (
           <span className="ml-auto flex-shrink-0 text-[11px] font-bold tracking-wider px-1 rounded bg-[var(--status-bad)] text-white">
             ALERT

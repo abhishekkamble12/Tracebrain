@@ -34,6 +34,7 @@ import type {
 } from '@/api/types';
 import { useSelection } from '@/state/SelectionContext';
 import { useGraph } from '@/api/hooks';
+import { memoryRecall, recalledServices } from '@/lib/memoryRecall';
 
 const NODE_TYPES = { service: ServiceNode, deploy: DeployNode };
 
@@ -160,6 +161,7 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
     const dim = (id: string) => spotlight != null && onPath.size > 0 && !onPath.has(id);
 
     const blast = blastFromSteps(inv);
+    const recalled = recalledServices(memoryRecall(inv?.steps));
     const serviceNames = new Set(services.map((s) => s.name));
     const touched = new Set([...runView.touched].filter((s) => serviceNames.has(s)));
 
@@ -182,6 +184,7 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
         suspects: suspectsPerService.get(s.name) ?? 0,
         touched: touched.has(s.name),
         dimmed: dim(s.name),
+        recalled: recalled.has(s.name),
       };
       // Explicit size: these nodes are rebuilt on every event, and React Flow 12 hides a node it
       // considers unmeasured (the whole graph went blank when a run finished).

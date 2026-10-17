@@ -19,6 +19,7 @@ import { ActionsPanel } from '@/features/actions/ActionsPanel';
 import { ReviewBox } from '@/features/review/ReviewBox';
 import { SelectionProvider } from '@/state/SelectionContext';
 import type { IncidentRow } from '@/api/types';
+import { memoryRecall } from '@/lib/memoryRecall';
 
 export const ConsolePage: React.FC = () => {
   const { tenant = 'payments', incidentId, invId } = useParams<{
@@ -239,6 +240,8 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
           remaining_candidates: storedCheck.remaining_candidates }
       : null);
 
+  const recall = React.useMemo(() => memoryRecall(inv?.steps), [inv?.steps]);
+
   const stepResults = React.useMemo(
     () => new Map((inv?.steps ?? []).map((s) => [s.n, s.result] as [number, unknown])),
     [inv?.steps]
@@ -383,6 +386,8 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
               invHypotheses={inv?.hypotheses}
               invFaithfulness={inv?.faithfulness}
               invOutcome={inv?.outcome}
+              recall={recall}
+              memoryEnabled={inv?.memory_enabled}
             />
           )}
           {activeTab === 'actions' && (
