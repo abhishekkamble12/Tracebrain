@@ -59,7 +59,7 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
   const navigate = useNavigate();
 
   const { memoryEnabled, setMemoryEnabled } = useMemory();
-  const { activeTopoMode, setTopoMode } = useSelection();
+  const { activeTopoMode, setTopoMode, clearPinnedEdges } = useSelection();
 
   const { data: inv, refetch: refetchInv } = useInvestigation(tenant, activeInvId);
 
@@ -195,7 +195,11 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
     const handler = (e: KeyboardEvent) => {
       const tag = (document.activeElement as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return; // Alt+digits navigate (AppShell)
       switch (e.key) {
+        case 'Escape':
+          clearPinnedEdges();
+          break;
         case 'I':
         case 'i':
           if (!inv && !isLive) void handleInvestigate();
@@ -225,7 +229,7 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [inv, isLive, isFailed, isInterrupted, memoryEnabled, setMemoryEnabled, activeTopoMode, setTopoMode]);
+  }, [inv, isLive, isFailed, isInterrupted, memoryEnabled, setMemoryEnabled, activeTopoMode, setTopoMode, clearPinnedEdges]);
 
   const reconnectStatus = runView.connection;
 

@@ -12,6 +12,8 @@ interface DemoQuickBarProps {
 // Demo beats from PLAN.md §8; only offered when the incident exists in the current tenant.
 const DEMO_INCIDENTS = [
   { id: 'inc:001', label: 'RCA vs decoy', icon: Flame, color: 'var(--status-warn)' },
+  // Same symptom later: confirm inc:001 first, then this run recalls its lesson.
+  { id: 'inc:007', label: 'Repeat · memory', icon: Brain, color: 'var(--agent-curator)' },
   { id: 'inc:025', label: 'Abstain', icon: ShieldCheck, color: 'var(--status-suspect)' },
 ];
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate, useParams } from 'react-router-dom';
 import { TopBar } from './TopBar';
 import { ShortcutSheet } from './ShortcutSheet';
 import { ApiStatusBanner } from './ApiStatusBanner';
@@ -8,6 +8,8 @@ import { MemoryProvider } from '@/state/MemoryContext';
 
 export const AppShell: React.FC = () => {
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
+  const navigate = useNavigate();
+  const { tenant = 'payments' } = useParams<{ tenant: string }>();
 
   // `?` opens the shortcut sheet (the sheet itself handles closing)
   React.useEffect(() => {
@@ -16,10 +18,19 @@ export const AppShell: React.FC = () => {
       if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
         setShortcutsOpen(true);
       }
+      // Alt+1/2/3: Console, Memory, Results (as listed in the shortcut sheet). e.code, since Alt
+      // changes e.key on some layouts.
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const to = { Digit1: `/t/${tenant}`, Digit2: `/t/${tenant}/memory`, Digit3: '/results' }[e.code];
+        if (to) {
+          e.preventDefault();
+          navigate(to);
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [navigate, tenant]);
 
   return (
     <MemoryProvider>
