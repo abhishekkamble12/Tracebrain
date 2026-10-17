@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -23,7 +23,7 @@ import {
   DEPLOY_NODE_W,
   DEPLOY_NODE_H,
 } from './layout';
-import type { RunView } from '@/stream/reducer';
+import type { RunView, TraceStep } from '@/stream/reducer';
 import type {
   GraphEdge,
   GraphNodeDeploy,
@@ -52,6 +52,34 @@ interface GraphStageProps {
   runView: RunView;
 }
 
+/** Hop number of each selected edge, walking out from `root` over the selected edges only
+ *  (direction ignored), so a path reads 1 → 2 → 3 from the alerted service. */
+function hopOrder(edges: GraphEdge[], ids: Set<number>, root?: string): Map<number, number> {
+  const hops = new Map<number, number>();
+  if (!root || ids.size === 0) return hops;
+  const selected = edges.filter((e) => ids.has(e.id));
+  const seen = new Set([root]);
+  let frontier = [root];
+  for (let d = 1; frontier.length > 0 && d <= 8; d++) {
+    const next: string[] = [];
+    for (const e of selected) {
+      if (hops.has(e.id)) continue;
+      const from = frontier.includes(e.source) ? e.source : frontier.includes(e.target) ? e.target : null;
+      if (!from) continue;
+      hops.set(e.id, d);
+      const other = from === e.source ? e.target : e.source;
+      if (!seen.has(other)) {
+        seen.add(other);
+        next.push(other);
+      }
+    }
+    frontier = next;
+  }
+  return hops;
+}
+
+const HOP_STAGGER_MS = 180;
+
 /** Blast radius (service → hops) from the latest blast_radius step stored on the investigation. */
 function blastFromSteps(inv?: InvestigationFull | null): Map<string, number> {
   const out = new Map<string, number>();
@@ -69,6 +97,20 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
   const asOf = useGraph(tenant, incident?.ts);
   const showNow = activeTopoMode === 'now' && Boolean(incident);
   const now = useGraph(tenant, null, showNow);
+
+  // While a run is live, the newest tool call's edges light up for a moment: the traversal, as it happens.
+  const lastStep = useMemo(
+    () => [...runView.rows].reverse().find((r): r is TraceStep => r.kind === 'step'),
+    [runView.rows]
+  );
+  const [liveEdgeIds, setLiveEdgeIds] = useState<number[]>([]);
+  useEffect(() => {
+    const ids = lastStep?.step.edge_ids ?? [];
+    if (!runView.live || ids.length === 0) return;
+    setLiveEdgeIds(ids);
+    const id = setTimeout(() => setLiveEdgeIds([]), 2600);
+    return () => clearTimeout(id);
+  }, [lastStep, runView.live]);
 
   const hypotheses: Hypothesis[] = useMemo(
     () => runView.hypotheses?.hypotheses ?? inv?.hypotheses ?? [],
@@ -101,8 +143,10 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
       for (const id of c.edge_ids ?? []) (c.verified ? citedOk : citedBad).add(id);
     }
 
-    // Explicit highlight (hovered claim, else pinned claim) dims everything off its path
-    const highlight = new Set(hoveredClaimEdgeIds.length ? hoveredClaimEdgeIds : pinnedEdgeIds);
+    // Explicit highlight (hovered claim or step, else pinned, else the live step) dims everything off its path
+    const highlight = new Set(
+      hoveredClaimEdgeIds.length ? hoveredClaimEdgeIds : pinnedEdgeIds.length ? pinnedEdgeIds : liveEdgeIds
+    );
     const spotlight = highlight.size > 0 ? highlight : focusedHypothesisRank != null ? new Set([...citedOk, ...citedBad]) : null;
     const onPath = new Set<string>();
     if (spotlight) {
@@ -179,6 +223,25 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
       }
     }
 
+    // Number the highlighted path (or, without one, the focused hypothesis's cited path) by hop.
+    const numbered = highlight.size > 0 ? highlight : new Set([...citedOk, ...citedBad]);
+    const hops = hopOrder([...depEdges, ...deployEdges], numbered, incident?.service);
+    const pathDecor = (id: number, solid: boolean) => {
+      const hop = hops.get(id);
+      if (hop == null) return {};
+      return {
+        label: String(hop),
+        labelStyle: { fill: '#07090E', fontSize: 11, fontWeight: 700, fontFamily: 'Geist Mono Variable, monospace' },
+        labelBgStyle: { fill: highlight.has(id) ? COLOR.hover : COLOR.cited },
+        labelBgPadding: [5, 2] as [number, number],
+        labelBgBorderRadius: 8,
+        // Draw the path outward from the alert, one hop after another (skipped for reduced motion in CSS).
+        drawStyle: solid
+          ? { strokeDasharray: 1600, animation: `tb-draw 520ms ease-out ${(hop - 1) * HOP_STAGGER_MS}ms both` }
+          : {},
+      };
+    };
+
     const style = (id: number, base: { stroke: string; width: number; dash?: string }) => {
       if (highlight.has(id)) return { stroke: COLOR.hover, width: 3, dash: undefined, z: 3 };
       if (citedBad.has(id)) return { stroke: COLOR.unverified, width: 2, dash: '5 4', z: 2 };
@@ -189,19 +252,22 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
     const edges: Edge[] = [];
     for (const e of depEdges) {
       const s = style(e.id, { stroke: COLOR.edge, width: 1.25 });
+      const { drawStyle, ...label } = pathDecor(e.id, !s.dash);
       edges.push({
         id: String(e.id),
         source: e.source,
         target: e.target,
         type: 'default',
         zIndex: s.z,
-        style: { stroke: s.stroke, strokeWidth: s.width, strokeDasharray: s.dash, opacity: spotlight && s.z === 0 ? 0.25 : 1 },
+        ...label,
+        style: { stroke: s.stroke, strokeWidth: s.width, strokeDasharray: s.dash, opacity: spotlight && s.z === 0 ? 0.25 : 1, ...drawStyle },
         markerEnd: { type: MarkerType.ArrowClosed, color: s.stroke, width: 14, height: 14 },
       });
     }
     for (const e of deployEdges) {
       if (!shownDeploys.has(e.source)) continue;
       const s = style(e.id, { stroke: COLOR.edge, width: 1, dash: '3 3' });
+      const { drawStyle, ...label } = pathDecor(e.id, !s.dash);
       edges.push({
         id: String(e.id),
         source: e.source,
@@ -209,13 +275,14 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
         targetHandle: 'deploy-in',
         type: 'straight',
         zIndex: s.z,
-        style: { stroke: s.stroke, strokeWidth: s.width, strokeDasharray: s.dash, opacity: spotlight && s.z === 0 ? 0.25 : 1 },
+        ...label,
+        style: { stroke: s.stroke, strokeWidth: s.width, strokeDasharray: s.dash, opacity: spotlight && s.z === 0 ? 0.25 : 1, ...drawStyle },
       });
     }
 
     return { nodes, edges };
   }, [asOf.data, now.data, showNow, hypotheses, runView.verification, runView.touched, inv, incident,
-      focusedHypothesisRank, hoveredClaimEdgeIds, pinnedEdgeIds]);
+      focusedHypothesisRank, hoveredClaimEdgeIds, pinnedEdgeIds, liveEdgeIds]);
 
   return (
     <div className="absolute inset-0 overflow-hidden">

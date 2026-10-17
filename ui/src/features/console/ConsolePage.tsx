@@ -239,6 +239,11 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
           remaining_candidates: storedCheck.remaining_candidates }
       : null);
 
+  const stepResults = React.useMemo(
+    () => new Map((inv?.steps ?? []).map((s) => [s.n, s.result] as [number, unknown])),
+    [inv?.steps]
+  );
+
   return (
     <>
       {/* ── Centre: Graph Stage ───────────────────────────────────────── */}
@@ -357,6 +362,7 @@ const ConsoleRun: React.FC<ConsoleRunProps> = ({ tenant, incidentId, incident, a
           {activeTab === 'trace' && (
             <TracePanel
               rows={runView.rows}
+              results={stepResults}
               onResume={handleResume}
               live={isLive}
               emptyText={

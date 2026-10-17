@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { useSelection } from '@/state/SelectionContext';
 import type { TraceItem, TraceStep, TraceHandoff, TraceHypotheses, TraceVerification, TraceError, TraceDone, TraceWaiting } from '@/stream/reducer';
 import {
   ChevronRight,
@@ -14,23 +15,29 @@ import {
 
 // ─── Arg summaries ────────────────────────────────────────────────────────────
 
+// Argument names match the MCP tool signatures in tracebrain/tools/mcp_server.py.
 function summariseArgs(tool: string, args: Record<string, unknown>): string {
   switch (tool) {
-    case 'blast_radius': return `service: ${args.service ?? args.svc ?? '?'}`;
-    case 'owners_of':
-      return `${Array.isArray(args.services) ? args.services.length : 1} services`;
-    case 'suspects':
-    case 'suspects_asof':
-      return `${args.service ?? args.svc ?? '?'} · window ${args.window_hours ?? '?'}h`;
-    case 'path_between': return `${args.a ?? '?'} → ${args.b ?? '?'}`;
-    case 'recall_lessons': return `symptom: ${args.symptom ?? '?'}`;
+    case 'blast_radius': return `${args.service ?? '?'}${args.max_hops ? ` · ≤${args.max_hops} hops` : ''}`;
+    case 'owners_of': {
+      const s = Array.isArray(args.services) ? (args.services as string[]) : [];
+      return s.length <= 3 ? s.join(', ') : `${s.length} services`;
+    }
+    case 'suspects': return `${args.service ?? '?'} · ${args.window_hours ?? 24}h window`;
+    case 'path_between': return `${args.from_service ?? '?'} → ${args.to_service ?? '?'}`;
+    case 'recall_lessons': return `${args.service ?? 'alerted service'}`;
     case 'write_finding': return `kind: ${args.kind ?? '?'}`;
-    case 'read_findings': return 'all findings';
-    case 'centrality': return 'centrality scores';
-    case 'recall_similar': return 'similar incidents';
-    case 'get_past_investigation': return `id: ${args.id ?? '?'}`;
+    case 'read_findings': return 'blackboard';
+    case 'centrality': return 'PageRank + betweenness';
+    case 'recall_similar': return 'confirmed incidents, same symptom';
+    case 'get_past_investigation': return `${args.incident_id ?? '?'}`;
     default: return JSON.stringify(args).slice(0, 80);
   }
+}
+
+function preview(value: unknown, limit = 3000): string {
+  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  return text.length > limit ? `${text.slice(0, limit)}\n… (${text.length - limit} more characters)` : text;
 }
 
 const AGENT_COLORS: Record<string, string> = {
@@ -42,17 +49,28 @@ const AGENT_COLORS: Record<string, string> = {
 
 // ─── Individual row renderers ─────────────────────────────────────────────────
 
-const StepRow: React.FC<{ item: TraceStep }> = ({ item }) => {
+const StepRow: React.FC<{ item: TraceStep; result?: unknown }> = ({ item, result }) => {
   const [open, setOpen] = React.useState(false);
   const { step } = item;
   const agentColor = AGENT_COLORS[step.agent] ?? 'var(--text-faint)';
+  const { setHoveredClaimEdgeIds, pinEdges, pinnedEdgeIds } = useSelection();
+  const edges = step.edge_ids ?? [];
+  const pinned = edges.length > 0 && edges.length === pinnedEdgeIds.length && edges.every((e) => pinnedEdgeIds.includes(e));
+  const shownResult = (step as { result?: unknown }).result ?? result;
 
   return (
     <div
       className={cn(
-        'flex flex-col gap-1 py-1.5 px-2 rounded transition-colors',
-        step.error ? 'bg-[var(--status-bad)]/10 border border-[var(--status-bad)]/30' : 'hover:bg-[var(--surface-hover)]/40'
+        'flex flex-col gap-1 py-1.5 px-2 rounded transition-colors border',
+        step.error
+          ? 'bg-[var(--status-bad)]/10 border-[var(--status-bad)]/30'
+          : pinned
+            ? 'bg-[var(--edge-cited)]/10 border-[var(--edge-cited)]/40'
+            : 'border-transparent hover:bg-[var(--surface-hover)]/40 hover:border-[var(--border-subtle)]'
       )}
+      // Hover shows this tool call's edges on the graph; clicking the tool name pins them.
+      onMouseEnter={() => edges.length > 0 && setHoveredClaimEdgeIds(edges)}
+      onMouseLeave={() => setHoveredClaimEdgeIds([])}
     >
       <div className="flex items-center gap-2">
         {/* Agent dot */}
@@ -61,15 +79,33 @@ const StepRow: React.FC<{ item: TraceStep }> = ({ item }) => {
           style={{ background: agentColor }}
           title={step.agent}
         />
-        {/* Tool name */}
-        <span className="font-mono text-[11px] text-[var(--text-primary)] flex-1 truncate">
-          {step.tool}
-          <span className="text-[var(--text-faint)] ml-1">({summariseArgs(step.tool, step.args)})</span>
-        </span>
+        {/* Tool name: a button when the call returned graph edges, so it can be pinned by keyboard too */}
+        {edges.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => pinEdges(pinned ? [] : edges)}
+            onFocus={() => setHoveredClaimEdgeIds(edges)}
+            onBlur={() => setHoveredClaimEdgeIds([])}
+            title={pinned ? 'Unpin from graph' : "Pin this tool call's edges on the graph"}
+            className="font-mono text-[12px] text-left text-[var(--text-primary)] flex-1 truncate hover:text-[var(--edge-cited)]"
+          >
+            {step.tool}
+            <span className="text-[var(--text-faint)] ml-1">({summariseArgs(step.tool, step.args)})</span>
+          </button>
+        ) : (
+          <span className="font-mono text-[12px] text-[var(--text-primary)] flex-1 truncate">
+            {step.tool}
+            <span className="text-[var(--text-faint)] ml-1">({summariseArgs(step.tool, step.args)})</span>
+          </span>
+        )}
         {/* Meta */}
         <div className="flex items-center gap-2 text-[10px] font-mono text-[var(--text-faint)] flex-shrink-0">
           <span>{step.ms}ms</span>
-          {step.edge_ids?.length > 0 && <span className="text-[var(--edge-cited)]">edges:{step.edge_ids.length}</span>}
+          {edges.length > 0 && (
+            <span className="text-[var(--edge-cited)]">
+              {edges.length} edge{edges.length === 1 ? '' : 's'}
+            </span>
+          )}
           {step.error && <AlertTriangle className="w-3 h-3 text-[var(--status-bad)]" />}
         </div>
         {/* Expand button */}
@@ -86,9 +122,20 @@ const StepRow: React.FC<{ item: TraceStep }> = ({ item }) => {
         <p className="text-[11px] text-[var(--status-bad)] pl-4 font-mono">{step.error}</p>
       )}
       {open && (
-        <pre className="text-[10px] font-mono text-[var(--text-secondary)] bg-[var(--bg-deep)] rounded p-2 overflow-x-auto mt-1 leading-relaxed">
-          {JSON.stringify(step.args, null, 2)}
-        </pre>
+        <div className="flex flex-col gap-1 mt-1">
+          <span className="text-[10px] uppercase tracking-wider text-[var(--text-faint)]">Arguments</span>
+          <pre className="text-[11px] font-mono text-[var(--text-secondary)] bg-[var(--bg-deep)] rounded p-2 overflow-x-auto leading-relaxed">
+            {preview(step.args)}
+          </pre>
+          <span className="text-[10px] uppercase tracking-wider text-[var(--text-faint)]">Result from the graph</span>
+          {shownResult === undefined ? (
+            <p className="text-[11px] text-[var(--text-faint)] italic px-1">Shown once the run finishes.</p>
+          ) : (
+            <pre className="text-[11px] font-mono text-[var(--text-secondary)] bg-[var(--bg-deep)] rounded p-2 overflow-auto max-h-64 leading-relaxed">
+              {preview(shownResult)}
+            </pre>
+          )}
+        </div>
       )}
     </div>
   );
@@ -241,13 +288,15 @@ const WaitingRow: React.FC<{ item: TraceWaiting }> = ({ item }) => {
 
 interface TracePanelProps {
   rows: TraceItem[];
+  /** Stored tool results by step number (live SSE steps carry no result). */
+  results?: Map<number, unknown>;
   onResume?: () => void;
   /** A run is in progress (shows a spinner in the empty state). */
   live?: boolean;
   emptyText?: string;
 }
 
-export const TracePanel: React.FC<TracePanelProps> = ({ rows, onResume, live = false, emptyText }) => {
+export const TracePanel: React.FC<TracePanelProps> = ({ rows, results, onResume, live = false, emptyText }) => {
   const bottomRef = React.useRef<HTMLDivElement>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = React.useState(true);
@@ -310,7 +359,7 @@ export const TracePanel: React.FC<TracePanelProps> = ({ rows, onResume, live = f
                 </div>
               );
             case 'step':
-              return <StepRow key={key} item={item} />;
+              return <StepRow key={key} item={item} result={results?.get(item.step.n)} />;
             case 'handoff':
               return <HandoffCard key={key} item={item} />;
             case 'fallback':

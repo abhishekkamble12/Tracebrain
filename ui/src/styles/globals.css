@@ -47,3 +47,12 @@
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;
 }
+/* Graph path draw-in (GraphStage): edges of a highlighted path draw outward hop by hop. */
+@keyframes tb-draw {
+  from { stroke-dashoffset: 1600; }
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__edge-path { animation: none !important; }
+}
