@@ -16,18 +16,26 @@ const STEP_LABELS: Record<string, string> = {
 interface StepperProps {
   state: InvestigationState | null | undefined;
   failed?: boolean;
+  /** Sandbox rollback check of the top hypothesis: true = cleared, false = did not clear,
+   *  null/undefined = never ran (abstention, no environment, or check failed). */
+  check?: boolean | null;
 }
 
-export const Stepper: React.FC<StepperProps> = ({ state, failed }) => {
+export const Stepper: React.FC<StepperProps> = ({ state, failed, check }) => {
   const currentIdx = stepIndex(state);
+  const verifyIdx = INVESTIGATION_STEPS.indexOf('VERIFIED');
 
   return (
     <div className="flex flex-col gap-1.5">
       <ol className="grid grid-cols-6" aria-label="Investigation progress">
         {INVESTIGATION_STEPS.map((step, i) => {
-          const isDone = i < currentIdx || (i === currentIdx && step === 'LEARNED');
-          const isCurrent = i === currentIdx && !isDone;
-          const label = STEP_LABELS[step] ?? step;
+          const passed = i < currentIdx || (i === currentIdx && step === 'LEARNED');
+          // A run moves past VERIFIED whether or not the check cleared: never show a tick it didn't earn.
+          const checkOutcome = i === verifyIdx && passed ? (check === true ? 'ok' : check === false ? 'bad' : 'skipped') : null;
+          const isDone = passed && checkOutcome !== 'bad' && checkOutcome !== 'skipped';
+          const isCurrent = i === currentIdx && !passed;
+          const label =
+            checkOutcome === 'bad' ? 'Not cleared' : checkOutcome === 'skipped' ? 'Skipped' : (STEP_LABELS[step] ?? step);
 
           return (
             <li key={step} className="relative flex flex-col items-center gap-1" aria-current={isCurrent ? 'step' : undefined}>
@@ -43,7 +51,11 @@ export const Stepper: React.FC<StepperProps> = ({ state, failed }) => {
               <span
                 className={cn(
                   'relative z-10 w-2.5 h-2.5 rounded-full border transition-colors',
-                  isDone
+                  checkOutcome === 'bad'
+                    ? 'bg-[var(--status-bad)] border-[var(--status-bad)]'
+                    : checkOutcome === 'skipped'
+                      ? 'bg-[var(--surface-panel)] border-[var(--text-faint)] border-dashed'
+                      : isDone
                     ? 'bg-[var(--status-ok)] border-[var(--status-ok)]'
                     : isCurrent
                       ? 'bg-[var(--accent)] border-[var(--accent)] ring-4 ring-[var(--accent)]/20'
@@ -53,11 +65,18 @@ export const Stepper: React.FC<StepperProps> = ({ state, failed }) => {
               <span
                 className={cn(
                   'text-[10px] whitespace-nowrap',
-                  isDone ? 'text-[var(--text-secondary)]' : isCurrent ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-faint)]'
+                  checkOutcome === 'bad'
+                    ? 'text-[var(--status-bad)] font-medium'
+                    : isDone || checkOutcome === 'skipped' ? 'text-[var(--text-secondary)]' : isCurrent ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-faint)]'
                 )}
               >
                 {label}
               </span>
+              {checkOutcome && (
+                <span className="sr-only">
+                  {checkOutcome === 'ok' ? 'rollback check cleared' : checkOutcome === 'bad' ? 'rollback check did not clear' : 'rollback check did not run'}
+                </span>
+              )}
             </li>
           );
         })}
