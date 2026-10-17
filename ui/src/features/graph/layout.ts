@@ -1,5 +1,6 @@
-// Fixed coordinates for the 12 Online Boutique services, five columns wide so the graph stays
-// legible in the ~600px centre pane at 1280px:
+// Fixed coordinates for the 12 Online Boutique services, five columns wide. Columns are tight on
+// purpose: the centre pane is ~740px at 1440px, so a narrower layout fits at a higher zoom and the
+// 16px labels stay readable in a screen recording:
 //   row 0                  frontend
 //   row 1        checkout             recommendation
 //   row 2  payment  email  cart  productcatalog  ad
@@ -12,13 +13,13 @@ export interface ServicePosition {
   y: number;
 }
 
-export const SERVICE_NODE_W = 168;
-export const SERVICE_NODE_H = 52;
-export const DEPLOY_NODE_W = 150;
-export const DEPLOY_NODE_H = 30;
+export const SERVICE_NODE_W = 176;
+export const SERVICE_NODE_H = 58;
+export const DEPLOY_NODE_W = 164;
+export const DEPLOY_NODE_H = 34;
 
-const COL = 196;
-const ROW = 176;
+const COL = 188;
+const ROW = 180;
 
 export const SERVICE_POSITIONS: Record<string, ServicePosition> = {
   frontend: { x: 2 * COL, y: 0 },
@@ -48,7 +49,7 @@ export function getServicePosition(name: string, fallbackIndex = 0): ServicePosi
 export function getDeployPosition(servicePos: ServicePosition, stackIndex: number): ServicePosition {
   return {
     x: servicePos.x + (SERVICE_NODE_W - DEPLOY_NODE_W) / 2,
-    y: servicePos.y + SERVICE_NODE_H + 16 + stackIndex * (DEPLOY_NODE_H + 6),
+    y: servicePos.y + SERVICE_NODE_H + 20 + stackIndex * (DEPLOY_NODE_H + 5),
   };
 }
 

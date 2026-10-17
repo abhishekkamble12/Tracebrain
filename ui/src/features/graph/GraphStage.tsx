@@ -39,7 +39,7 @@ const NODE_TYPES = { service: ServiceNode, deploy: DeployNode };
 
 // SVG marker colours are presentation attributes, which can't resolve CSS variables.
 const COLOR = {
-  edge: '#3A4560',
+  edge: '#55627F',
   cited: '#FB923C',
   unverified: '#F43F5E',
   hover: '#7C8CFF',
@@ -231,7 +231,7 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
       if (hop == null) return {};
       return {
         label: String(hop),
-        labelStyle: { fill: '#07090E', fontSize: 11, fontWeight: 700, fontFamily: 'Geist Mono Variable, monospace' },
+        labelStyle: { fill: '#07090E', fontSize: 13, fontWeight: 700, fontFamily: 'Geist Mono Variable, monospace' },
         labelBgStyle: { fill: highlight.has(id) ? COLOR.hover : COLOR.cited },
         labelBgPadding: [5, 2] as [number, number],
         labelBgBorderRadius: 8,
@@ -243,9 +243,9 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
     };
 
     const style = (id: number, base: { stroke: string; width: number; dash?: string }) => {
-      if (highlight.has(id)) return { stroke: COLOR.hover, width: 3, dash: undefined, z: 3 };
-      if (citedBad.has(id)) return { stroke: COLOR.unverified, width: 2, dash: '5 4', z: 2 };
-      if (citedOk.has(id)) return { stroke: COLOR.cited, width: 2.5, dash: undefined, z: 2 };
+      if (highlight.has(id)) return { stroke: COLOR.hover, width: 4, dash: undefined, z: 3 };
+      if (citedBad.has(id)) return { stroke: COLOR.unverified, width: 2.5, dash: '6 4', z: 2 };
+      if (citedOk.has(id)) return { stroke: COLOR.cited, width: 3.5, dash: undefined, z: 2 };
       return { ...base, z: 0 };
     };
 
@@ -315,8 +315,8 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
           nodesConnectable={false}
           elementsSelectable={false}
           fitView
-          fitViewOptions={{ padding: 0.15 }}
-          minZoom={0.4}
+          fitViewOptions={{ padding: 0.05 }}
+          minZoom={0.5}
           maxZoom={1.75}
           proOptions={{ hideAttribution: true }}
           style={{ background: 'var(--bg-deep)' }}
@@ -336,7 +336,7 @@ export const GraphStage: React.FC<GraphStageProps> = ({ tenant, incident, inv, r
 const FitOnTopologyChange: React.FC<{ nodeIds: string }> = ({ nodeIds }) => {
   const { fitView } = useReactFlow();
   useEffect(() => {
-    const id = requestAnimationFrame(() => void fitView({ padding: 0.15, duration: 200 }));
+    const id = requestAnimationFrame(() => void fitView({ padding: 0.05, duration: 200 }));
     return () => cancelAnimationFrame(id);
   }, [nodeIds, fitView]);
   return null;

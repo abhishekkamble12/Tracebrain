@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { GitCommitVertical, Check, X } from 'lucide-react';
+import { DEPLOY_NODE_H, DEPLOY_NODE_W } from './layout';
 
 export interface DeployNodeData {
   deployId: string;
@@ -23,7 +24,7 @@ export const DeployNode: React.FC<NodeProps> = ({ data }) => {
 
   if (d.more) {
     return (
-      <div className="font-mono text-[10px] text-[var(--text-faint)] px-2" style={{ width: 150 }}>
+      <div className="font-mono text-[12px] text-[var(--text-faint)] px-2" style={{ width: DEPLOY_NODE_W }}>
         +{d.more} more deploys
         <Handle type="source" position={Position.Top} className="!opacity-0" />
       </div>
@@ -39,21 +40,21 @@ export const DeployNode: React.FC<NodeProps> = ({ data }) => {
           : 'bg-[var(--surface-panel)] border-[var(--border-subtle)]',
         d.dimmed && 'opacity-35',
       )}
-      style={{ width: 150, height: 30 }}
+      style={{ width: DEPLOY_NODE_W, height: DEPLOY_NODE_H }}
       title={`${d.deployId}${d.kind ? ` · ${d.kind}` : ''}`}
     >
       {ranked ? (
-        <span className="flex-shrink-0 w-4 h-4 rounded-full bg-[var(--status-suspect)] text-[var(--text-inverse)] text-[9px] font-bold flex items-center justify-center">
+        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[var(--status-suspect)] text-[var(--text-inverse)] text-[11px] font-bold flex items-center justify-center">
           {d.rank}
         </span>
       ) : (
         <GitCommitVertical className="w-3.5 h-3.5 flex-shrink-0 text-[var(--text-faint)]" />
       )}
       <div className="flex flex-col min-w-0 leading-tight">
-        <span className={cn('font-mono text-[10px] truncate', ranked ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]')}>
+        <span className={cn('font-mono text-[13px] truncate', ranked ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]')}>
           {d.deployId}
         </span>
-        <span className="font-mono text-[9px] text-[var(--text-faint)] truncate">
+        <span className="font-mono text-[11px] text-[var(--text-faint)] truncate">
           {[d.kind, typeof d.minutesBefore === 'number' ? `${d.minutesBefore}m before` : null].filter(Boolean).join(' · ')}
         </span>
       </div>

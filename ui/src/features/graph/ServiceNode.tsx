@@ -1,6 +1,7 @@
 import React from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
+import { SERVICE_NODE_H, SERVICE_NODE_W } from './layout';
 
 export interface ServiceNodeData {
   name: string;
@@ -34,27 +35,27 @@ export const ServiceNode: React.FC<NodeProps> = ({ data }) => {
               : 'border-[var(--border-strong)] bg-[var(--surface-card)]',
         d.dimmed && 'opacity-35',
       )}
-      style={{ width: 168, minHeight: 52, padding: '7px 10px' }}
+      style={{ width: SERVICE_NODE_W, height: SERVICE_NODE_H, padding: '6px 10px' }}
     >
       {d.touched && (
         <span className="absolute -inset-1 rounded-xl border-2 border-[var(--accent)] motion-safe:animate-ping opacity-40 pointer-events-none" />
       )}
 
       <div className="flex items-center gap-1.5 min-w-0">
-        <span className="font-mono text-[12px] font-semibold text-[var(--text-primary)] truncate">{d.name}</span>
+        <span className="font-mono text-[16px] font-semibold text-[var(--text-primary)] truncate">{d.name}</span>
         {d.alerted && (
-          <span className="ml-auto flex-shrink-0 text-[9px] font-bold tracking-wider px-1 rounded bg-[var(--status-bad)] text-white">
+          <span className="ml-auto flex-shrink-0 text-[11px] font-bold tracking-wider px-1 rounded bg-[var(--status-bad)] text-white">
             ALERT
           </span>
         )}
         {!d.alerted && inBlast && (
-          <span className="ml-auto flex-shrink-0 text-[9px] font-mono px-1 rounded border border-[var(--status-warn)]/50 text-[var(--status-warn)]">
+          <span className="ml-auto flex-shrink-0 text-[11px] font-mono px-1 rounded border border-[var(--status-warn)]/50 text-[var(--status-warn)]">
             hop {d.blastHops}
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 mt-0.5 text-[10px] min-w-0">
+      <div className="flex items-center gap-1.5 mt-0.5 text-[12px] min-w-0">
         <span className="text-[var(--text-secondary)] truncate">{d.team ?? 'no owner'}</span>
         {!!d.suspects && (
           <span className="ml-auto flex-shrink-0 font-mono text-[var(--status-suspect)]">

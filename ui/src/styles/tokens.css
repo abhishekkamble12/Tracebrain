@@ -15,7 +15,7 @@
   /* Typography Scale */
   --text-primary: #F1F4FA;
   --text-secondary: #9DA8BE;
-  --text-faint: #67748E;
+  --text-faint: #8090AA;   /* ≥4.5:1 on every surface (was #67748E, 3.6–3.9:1) */
   --text-inverse: #07090E;
 
   /* Accent & Core Brand */
@@ -36,7 +36,7 @@
 
   /* Canvas Graph Elements */
   --graph-grid: rgba(42, 52, 76, 0.25);
-  --edge-default: #2A344C;
+  --edge-default: #55627F;
   --edge-active: #7C8CFF;
   --edge-cited: #FB923C;
   --edge-cited-hover: rgba(251, 146, 60, 0.6);
