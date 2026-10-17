@@ -198,7 +198,18 @@ export const ReviewBox: React.FC<ReviewBoxProps> = ({
         </div>
       )}
 
+      {/* Abstention: there is no culprit to confirm (the curator needs a deploy), so say so instead of
+          offering a Confirm that the API would refuse. Reject records that the abstention was wrong. */}
+      {hypotheses.length === 0 && (
+        <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+          The investigator abstained: nothing deployed on this service's dependencies (as of the incident) in
+          the look-back window. There is no culprit to confirm, so nothing is written to memory. If you know
+          the abstention was wrong, reject it.
+        </p>
+      )}
+
       {/* Cause Synthesis Field */}
+      {hypotheses.length > 0 && (
       <div className="flex flex-col gap-1">
         <label className="text-[10px] text-[var(--text-faint)] uppercase font-mono">
           Synthesized Root Cause
@@ -211,6 +222,7 @@ export const ReviewBox: React.FC<ReviewBoxProps> = ({
           className="w-full text-xs px-2 py-1.5 rounded bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] resize-none"
         />
       </div>
+      )}
 
       {/* Reviewer Signature & Submit Buttons */}
       <div className="flex items-center gap-2 pt-1">
@@ -233,9 +245,10 @@ export const ReviewBox: React.FC<ReviewBoxProps> = ({
           className="px-2.5 py-1.5 rounded text-xs font-medium text-[var(--status-bad)] bg-[var(--status-bad)]/10 border border-[var(--status-bad)]/30 hover:bg-[var(--status-bad)]/20 disabled:opacity-50 transition-colors flex items-center gap-1"
         >
           <XCircle className="w-3.5 h-3.5" />
-          Reject
+          {hypotheses.length === 0 ? 'Abstention was wrong' : 'Reject'}
         </button>
 
+        {hypotheses.length > 0 && (
         <button
           type="button"
           onClick={() => void handleReview('confirm')}
@@ -249,6 +262,7 @@ export const ReviewBox: React.FC<ReviewBoxProps> = ({
           )}
           Confirm
         </button>
+        )}
       </div>
     </div>
   );
