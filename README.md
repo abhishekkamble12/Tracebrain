@@ -23,6 +23,40 @@
 - **Honest:** wrong picks get caught (a sandbox rollback check on a copy of the graph). If there is no evidence, the agent abstains instead of guessing.
 - **Learns safely:** memory is written only from human-confirmed outcomes, and it measurably improves the next answer (top-1 **22 → 30** of 48 incidents).
 
+### How it works, in order
+
+```
+Alert fires on a service at time t
+  │
+  ├─ 1. Graph "as of t"        every DEPENDS_ON / OWNS edge filtered to valid_from <= t < valid_to
+  ├─ 2. Triage agent (MCP)     blast radius · who to page (betweenness) · owners then · similar past incidents
+  │                            → writes Finding nodes → HANDOFF edge
+  ├─ 3. Investigator (MCP)     reads the findings · recalls lessons · ranks suspect deploys (scored, with paths)
+  ├─ 4. Evidence gate          every claim must cite edge ids this run retrieved, and they must match the claim
+  ├─ 5. Actions                ticket to the owner then · rollback proposal · page chosen by the algorithm
+  ├─ 6. Sandbox check          the rollback is tried on Graph.copy(); the reviewer sees what would be blamed next
+  └─ 7. Human review           confirm → Cause + Lesson written to the graph → recalled by the next investigation
+```
+
+### For judges: the 3-minute path
+
+1. **Watch** the [2-minute video](https://www.youtube.com/watch?v=kW73gVgkJoY).
+2. **Skim** [How it fits the tracks](#how-it-fits-the-tracks): every focus point of Tracks 01 and 02, with the file that implements it.
+3. **Check the numbers** without an API key: `uv run pytest -q` (65 tests against a real FalkorDB) and `uv run python eval/run.py` (the [results table](#results-graph-vs-no-graph)).
+4. **Read the reasoning** in [The Cypher the product depends on](#the-cypher-the-product-depends-on).
+
+### Submission checklist
+
+| Required by the rules | Where |
+|---|---|
+| Public source code | This repository, MIT licence. All 24 commits are from Oct 15–18 2026 |
+| README with setup and graph data model | [Run it in 5 minutes](#run-it-in-5-minutes) · [Graph data model](#graph-data-model) |
+| Cypher queries and graph algorithms used | [The Cypher the product depends on](#the-cypher-the-product-depends-on) · all ~55 statements in [`queries.py`](tracebrain/queries.py) |
+| Demo video | [YouTube, 2 min](https://www.youtube.com/watch?v=kW73gVgkJoY) |
+| Live deployment or complete local setup | Local setup: one PowerShell command on Windows, or 7 commands with Docker, uv and Node |
+| Tracks entered | **Track 01** Agents That Act on Connected Data · **Track 02** Agent Memory and Coordination |
+| AI assistance disclosed | [AI assistance disclosure](#ai-assistance-disclosure) |
+
 ---
 
 ## What a judge should look at
@@ -47,7 +81,7 @@ This is a real run (Groq `gpt-oss-120b`, live FalkorDB) on `inc:001`, "checkout 
 2. **Triage agent.** It calls `blast_radius` (multi-hop upstream traversal), `page_priority` (betweenness on the graph as of the incident), `owners_of` (the owning team *at that time*) and `recall_similar` (confirmed past incidents) over **MCP**. It writes its findings as `Finding` nodes and hands off with a `HANDOFF` edge.
 3. **Investigator agent.** It reads the findings from the graph and calls `suspects`: every deploy within 3 hops of `checkout` in the 24h window, each with its path edge ids and an explicit score (proximity, recency, change size, failure history, PageRank centrality, lessons).
 4. **Evidence gate.** The agent submits 3 hypotheses. Every claim cites edge ids, and the gate checks that each edge was returned by a tool in this run, exists in the graph, and is about what the claim says. Failures are sent back to the agent to fix.
-5. **Act, then check.** It proposes a ticket to the owning team and a rollback of #1. **Who gets paged is decided by a graph algorithm, not the LLM**: the owner of the service with the highest betweenness in the blast radius (the chokepoint most traffic flows through). The rollback is tried on a **copy of the graph** (`Graph.copy`): the suspects are re-ranked without that deploy.
+5. **Act, then check.** It proposes a ticket to the owning team and a rollback of #1. **Who gets paged is decided by a graph algorithm, not the LLM**: the owner of the service with the highest betweenness in the blast radius (the chokepoint most traffic flows through). This was added after the video was recorded. The rollback is tried on a **copy of the graph** (`Graph.copy`): the suspects are re-ranked without that deploy.
 6. **The catch.** The agent's #1 was a newer code change on `redis-cart`. Rolling it back **did not clear** the symptom, so the review box preselected the sandbox's next suspect, a config change on `redis-cart`: the injected culprit.
 7. **Human confirms → memory.** Confirming writes a `Cause` and a `Lesson` ("for timeout on checkout, check redis-cart first") linked to the incident.
 8. **Next time.** On `inc:007` (same symptom, later), both agents recall that lesson and the precedent from the graph. The right deploy ranks #1 and its rollback check clears.
@@ -333,6 +367,27 @@ Server: [`tracebrain/tools/mcp_server.py`](tracebrain/tools/mcp_server.py). It r
 ## Data
 
 All data is **synthetic**, from a seeded, deterministic generator ([`connectors/synthetic.py`](tracebrain/connectors/synthetic.py)). It is an Online Boutique-shaped system: 12 services, 18 dependency edges, 3 timeline changes (a `currency` → `currency-v2` migration, an ownership transfer, a new dependency), about 230 deploys and 26 incidents per tenant. Each incident has an injected culprit plus decoys: newer deploys on callers, other deploys on the dependency path, and stale deploys on dependencies that aren't live at incident time. The ground truth (`data/ground_truth.json`) is never shown to the agents, and a leakage check makes sure no agent-visible text hints at the cause. Names are fictional. No private or personal data is used.
+
+## Design decisions (and why)
+
+**Why rebuild the graph "as of" the incident?** Dependencies and owners change. A time-blind graph ranks the real culprit lower in 10 of 48 incidents and names the wrong owning team in 8. Every temporal edge carries `valid_from`/`valid_to`, and every path query filters on it.
+
+**Why must claims cite edge ids?** An LLM's explanation is otherwise unverifiable. Making the agent cite the exact edges its tools returned turns "the model says so" into a path a human can check. The gate rejects fabricated or irrelevant edges and sends the problems back to the agent.
+
+**Why is the suspect ranking deterministic, with the LLM reasoning over it?** Reproducibility and a fair eval. The ranking can be measured against ground truth without LLM noise. The LLM adds judgement on top: re-ranking with a lesson or a precedent, writing the claims, choosing actions.
+
+**Why does only a human confirmation write memory?** A wrong lesson would bias every later investigation. So Causes and Lessons are written only on a human confirm, a reject weakens them, and they can be retracted. Memory is also only recalled from incidents *before* the current one, so it never leaks the answer.
+
+**Why do agents share state through the graph and not through messages?** The handoff is then durable and inspectable: a restarted server resumes from the `Step` and `Finding` nodes, and the UI shows exactly what triage handed over.
+
+**Why run graph algorithms on a copy?** FalkorDB's `algo.*` can't filter edges by validity. Copying the graph, deleting the edges that weren't live at `t` and running betweenness there gives a time-correct ranking without touching the live graph.
+
+## What's next
+
+- Real connectors (PagerDuty, GitHub deploys, service catalogues) behind the existing [`connectors/base.py`](tracebrain/connectors/base.py) protocol.
+- A real rollback environment (revert in staging, watch metrics) in place of the oracle.
+- Letting agents run in parallel on one incident (e.g. one per suspect service), coordinated through the same blackboard.
+- Executing approved actions (open the ticket, send the page) after human review.
 
 ## Limitations (honest)
 
