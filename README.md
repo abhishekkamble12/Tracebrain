@@ -114,6 +114,7 @@ From `uv run python eval/run.py`. It is deterministic, makes no LLM calls, and w
 | Shared state and handoffs | Agents share state only through the graph: `Finding` nodes plus a `HANDOFF` edge | `ADD_FINDING`, `HANDOFF` in `queries.py` |
 | Persistent history across sessions | The state machine lives in the graph: kill the server mid-run, `POST …/resume` continues and replays finished tool calls from `Step` nodes | [`orchestrator.py`](tracebrain/orchestrator.py), tests in `tests/test_resume_verify.py` |
 | Separate memory per tenant | One FalkorDB graph per tenant (`tenant_payments`, `tenant_platform`); the LLM can't see or choose the tenant | `db.py`, `test_mcp_tenant_isolation` |
+| High-concurrency reads/writes | 20 investigations run at once across both tenants, then all 20 human confirmations at once: every step chain, finding, hypothesis and memory counter stays intact and in its own tenant. The test found a lost update (10 concurrent confirms counted as 5); memory counters are now updated atomically in Cypher | [`tests/test_concurrency.py`](tests/test_concurrency.py) |
 
 ---
 
@@ -147,7 +148,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run-local.ps1      # add -Reset
 
 **Check it without an API key:**
 ```bash
-uv run pytest -q              # 63 tests against a real FalkorDB (they skip if it isn't running)
+uv run pytest -q              # 64 tests against a real FalkorDB (they skip if it isn't running)
 uv run python eval/run.py     # the results table above, no LLM calls
 ```
 
@@ -357,7 +358,7 @@ tracebrain/
 eval/run.py         deterministic evaluation -> eval/results.json
 ui/                 React + Vite + React Flow console
 scripts/            run-local.ps1, capability_check.py, export_cypher_for_ui.py
-tests/              63 tests against a real FalkorDB
+tests/              64 tests against a real FalkorDB
 ```
 
 ## AI assistance disclosure

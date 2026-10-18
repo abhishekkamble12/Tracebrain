@@ -98,27 +98,20 @@ def upsert(tenant: str, text: str, judge: Judge | None = llm_judge) -> dict:
     return {**row, "is_new": is_new}
 
 
+def _one(rows: list[dict], key: str) -> dict:
+    if not rows:
+        raise KeyError(key)
+    return rows[0]
+
+
 def confirm(tenant: str, key: str) -> dict:
-    c = next(c for c in all_causes(tenant) if c["key"] == key)
-    n = c["confirmations"] + 1
-    conf = round(1 - 0.5 * 0.7 ** n, 4)
-    db.write(tenant, queries.SET_CAUSE_STATS, {"key": key, "confirmations": n, "rejections": c["rejections"],
-                                               "confidence": conf, "retracted": False})
-    return {"key": key, "confirmations": n, "confidence": conf}
+    """confidence = 1 - 0.5 * 0.7^confirmations, computed in the graph so concurrent confirms all count."""
+    return _one(db.write(tenant, queries.CONFIRM_CAUSE, {"key": key}), key)
 
 
 def reject(tenant: str, key: str) -> dict:
-    c = next(c for c in all_causes(tenant) if c["key"] == key)
-    conf = round(c["confidence"] * 0.5, 4)
-    retracted = conf < RETRACT_BELOW
-    db.write(tenant, queries.SET_CAUSE_STATS, {"key": key, "confirmations": c["confirmations"],
-                                               "rejections": c["rejections"] + 1, "confidence": conf,
-                                               "retracted": retracted})
-    return {"key": key, "confidence": conf, "retracted": retracted}
+    return _one(db.write(tenant, queries.REJECT_CAUSE, {"key": key, "retract_below": RETRACT_BELOW}), key)
 
 
 def retract(tenant: str, key: str) -> None:
-    c = next(c for c in all_causes(tenant) if c["key"] == key)
-    db.write(tenant, queries.SET_CAUSE_STATS, {"key": key, "confirmations": c["confirmations"],
-                                               "rejections": c["rejections"], "confidence": c["confidence"],
-                                               "retracted": True})
+    _one(db.write(tenant, queries.RETRACT_CAUSE, {"key": key}), key)

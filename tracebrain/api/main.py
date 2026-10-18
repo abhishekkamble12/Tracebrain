@@ -221,7 +221,7 @@ def retract_cause(tenant: str, key: str) -> dict:
     check_tenant(tenant)
     try:
         semantic.retract(tenant, key)
-    except StopIteration:
+    except KeyError:
         raise HTTPException(404, f"unknown cause {key!r}")
     return {"key": key, "retracted": True}
 

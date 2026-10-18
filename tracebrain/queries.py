@@ -328,10 +328,22 @@ ON CREATE SET c.name = $name, c.aliases = [], c.confidence = 0.5, c.confirmation
 SET c.aliases = CASE WHEN $alias IN c.aliases OR $alias = c.name THEN c.aliases ELSE c.aliases + [$alias] END
 RETURN c.key AS key, c.confirmations AS confirmations, c.rejections AS rejections, c.confidence AS confidence"""
 
-SET_CAUSE_STATS = """
+# Confirm/reject update the counters inside one query, so concurrent reviews can't lose an update.
+CONFIRM_CAUSE = """
 MATCH (c:Cause {key: $key})
-SET c.confirmations = $confirmations, c.rejections = $rejections, c.confidence = $confidence,
-    c.retracted = $retracted
+SET c.confirmations = c.confirmations + 1
+SET c.confidence = round((1 - 0.5 * 0.7 ^ c.confirmations) * 10000) / 10000.0, c.retracted = false
+RETURN c.key AS key, c.confirmations AS confirmations, c.confidence AS confidence"""
+
+REJECT_CAUSE = """
+MATCH (c:Cause {key: $key})
+SET c.rejections = c.rejections + 1, c.confidence = round(c.confidence * 0.5 * 10000) / 10000.0
+SET c.retracted = c.confidence < $retract_below
+RETURN c.key AS key, c.confidence AS confidence, c.retracted AS retracted"""
+
+RETRACT_CAUSE = """
+MATCH (c:Cause {key: $key})
+SET c.retracted = true
 RETURN c.key AS key"""
 
 LINK_CAUSE = """
