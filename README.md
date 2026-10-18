@@ -4,9 +4,11 @@
 
 > **Graph Hacks: Context for AI Agents** (WeMakeDevs × FalkorDB, Oct 15–18 2026)
 > **Tracks:** Track 01, *Agents That Act on Connected Data* · Track 02, *Agent Memory and Coordination*
-> **Demo video (2 min):** _add link_ · **Run it:** [one command](#run-it-in-5-minutes) · **Results:** [eval/results.json](eval/results.json)
+> **Demo video (2 min):** [https://www.youtube.com/watch?v=kW73gVgkJoY](https://www.youtube.com/watch?v=kW73gVgkJoY) · **Run it:** [one command](#run-it-in-5-minutes) · **Results:** [eval/results.json](eval/results.json)
 
-![Tracebrain console: the repeat incident, with the lesson recalled from memory and the cited path on the graph](docs/img/tracebrain-memory-recall.jpg)
+[![Tracebrain console: the repeat incident, with the lesson recalled from memory and the cited path on the graph. Click to watch the demo.](docs/img/tracebrain-memory-recall.jpg)](https://www.youtube.com/watch?v=kW73gVgkJoY)
+
+▶ **[Watch the 2-minute demo on YouTube](https://www.youtube.com/watch?v=kW73gVgkJoY)**: real agents (Groq) on a live FalkorDB graph, from alert to verified root cause to memory.
 
 ---
 
