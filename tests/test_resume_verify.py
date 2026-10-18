@@ -79,14 +79,15 @@ def test_resume_after_crash_in_investigator_replays_instead_of_rerunning(world):
     crash = CrashOn(Policy(truth["service"]), "investigator", nth=3)  # after read_findings + recall_lessons
     assert anyio.run(lambda: orchestrator.run(tenant, inv_id, chat_fn=crash, environment=None)) == "FAILED"
     before = [s["tool"] for s in episodic.steps(tenant, inv_id)]
-    assert before == ["blast_radius", "owners_of", "write_finding", "write_finding", "read_findings", "recall_lessons"]
+    assert before == ["blast_radius", "owners_of", "write_finding", "write_finding", "page_priority", "write_finding",
+                      "read_findings", "recall_lessons"]
 
     events: list = []
     state = anyio.run(lambda: orchestrator.run(tenant, inv_id, chat_fn=Policy(truth["service"]), environment=None,
                                                on_event=lambda k, d: events.append((k, d))))
     assert state == "AWAITING_REVIEW"
     resumed = next(d for k, d in events if k == "resumed")
-    assert resumed["from_state"] == "TRIAGED" and resumed["replayed_steps"] == 6
+    assert resumed["from_state"] == "TRIAGED" and resumed["replayed_steps"] == 8
     after = episodic.steps(tenant, inv_id)
     assert [s["tool"] for s in after] == before + ["suspects"]          # nothing re-executed
     assert [s["n"] for s in after] == list(range(1, len(after) + 1))
@@ -107,7 +108,7 @@ def test_resume_mid_triage_continues_triage(world):
     tools = [s["tool"] for s in episodic.steps(tenant, inv_id)]
     assert tools[:4] == ["blast_radius", "owners_of", "write_finding", "write_finding"]
     assert tools.count("blast_radius") == 1
-    assert {f["kind"] for f in episodic.findings(tenant, inv_id)} == {"blast_radius", "owners"}
+    assert {f["kind"] for f in episodic.findings(tenant, inv_id)} == {"blast_radius", "owners", "page_priority"}
 
 
 def test_run_on_finished_investigation_is_a_no_op(world):

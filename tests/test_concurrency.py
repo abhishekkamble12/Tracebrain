@@ -74,7 +74,8 @@ def test_parallel_investigations_and_reviews_do_not_interfere(tenants):
                        {"id": inv_ids[i]})[0]["n"] == len(full["steps"]) - 1
         assert all(s["args"].get("service", truth["service"]) == truth["service"] for s in full["steps"])
         # Blackboard: exactly this run's two findings, handed to the investigator.
-        assert sorted(f["kind"] for f in full["findings"]) == ["blast_radius", "owners"]
+        assert [a["kind"] for a in full["actions"]] == ["rollback_proposal", "page"]
+        assert sorted(f["kind"] for f in full["findings"]) == ["blast_radius", "owners", "page_priority"]
         assert all(f["handed_to"] == ["investigator"] for f in full["findings"])
         (h,) = full["hypotheses"]
         assert h["deploy_id"] == truth["culprit_deploy"] and all(c["verified"] for c in h["claims"])

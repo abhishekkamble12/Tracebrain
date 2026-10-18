@@ -44,10 +44,10 @@
 This is a real run (Groq `gpt-oss-120b`, live FalkorDB) on `inc:001`, "checkout requests timing out".
 
 1. **The graph as of the incident.** Tracebrain reads the dependency graph with every edge filtered to `valid_from <= t < valid_to`, so it never reasons over today's topology.
-2. **Triage agent.** It calls `blast_radius` (multi-hop upstream traversal), `owners_of` (the owning team *at that time*) and `recall_similar` (confirmed past incidents) over **MCP**. It writes its findings as `Finding` nodes and hands off with a `HANDOFF` edge.
+2. **Triage agent.** It calls `blast_radius` (multi-hop upstream traversal), `page_priority` (betweenness on the graph as of the incident), `owners_of` (the owning team *at that time*) and `recall_similar` (confirmed past incidents) over **MCP**. It writes its findings as `Finding` nodes and hands off with a `HANDOFF` edge.
 3. **Investigator agent.** It reads the findings from the graph and calls `suspects`: every deploy within 3 hops of `checkout` in the 24h window, each with its path edge ids and an explicit score (proximity, recency, change size, failure history, PageRank centrality, lessons).
 4. **Evidence gate.** The agent submits 3 hypotheses. Every claim cites edge ids, and the gate checks that each edge was returned by a tool in this run, exists in the graph, and is about what the claim says. Failures are sent back to the agent to fix.
-5. **Act, then check.** It proposes a ticket to the owning team, a rollback of #1, and a page. The rollback is tried on a **copy of the graph** (`Graph.copy`): the suspects are re-ranked without that deploy.
+5. **Act, then check.** It proposes a ticket to the owning team and a rollback of #1. **Who gets paged is decided by a graph algorithm, not the LLM**: the owner of the service with the highest betweenness in the blast radius (the chokepoint most traffic flows through). The rollback is tried on a **copy of the graph** (`Graph.copy`): the suspects are re-ranked without that deploy.
 6. **The catch.** The agent's #1 was a newer code change on `redis-cart`. Rolling it back **did not clear** the symptom, so the review box preselected the sandbox's next suspect, a config change on `redis-cart`: the injected culprit.
 7. **Human confirms → memory.** Confirming writes a `Cause` and a `Lesson` ("for timeout on checkout, check redis-cart first") linked to the incident.
 8. **Next time.** On `inc:007` (same symptom, later), both agents recall that lesson and the precedent from the graph. The right deploy ranks #1 and its rollback check clears.
@@ -98,9 +98,9 @@ From `uv run python eval/run.py`. It is deterministic, makes no LLM calls, and w
 | Judging focus | Tracebrain | Where |
 |---|---|---|
 | Multi-hop reasoning | As-of blast radius (`DEPENDS_ON*1..5`) and suspect closure (`*0..3` → deploy → author) | [`queries.py`](tracebrain/queries.py) `BLAST_RADIUS`, `SUSPECTS` |
-| Graph queries/algorithms as agent tools | 11 MCP tools wrap Cypher and `algo.pageRank` / `algo.betweenness` | [`tools/mcp_server.py`](tracebrain/tools/mcp_server.py) |
+| Graph queries/algorithms as agent tools | 12 MCP tools wrap Cypher and `algo.pageRank` / `algo.betweenness`. `page_priority` runs `algo.betweenness` on a **time-sliced copy** of the graph (`GRAPH.COPY`, then delete every edge not valid at the incident time), so the algorithm sees the topology as it was | [`tools/impl.py`](tracebrain/tools/impl.py) `page_priority` |
 | Tool selection through MCP | Agents pick from per-agent allowlists of MCP tools; tenant and time travel as hidden MCP metadata | [`agents/loop.py`](tracebrain/agents/loop.py), [`orchestrator.py`](tracebrain/orchestrator.py) |
-| Actions based on the graph | Ticket to the owning team (as of then), rollback proposal, page an owner. Stored as `Action -TARGETS->` nodes; rollback tried on `Graph.copy` | [`verification.py`](tracebrain/verification.py) |
+| Actions based on the graph | Ticket to the owning team (as of then) and rollback proposal (rollback tried on `Graph.copy`). The **page is chosen by betweenness**: in 9 of 26 incidents per tenant it goes to the owner of an upstream chokepoint, not the alerted service (e.g. `payment` fails → page Checkout, who own `checkout`). Stored as `Action -TARGETS->` nodes | [`orchestrator.py`](tracebrain/orchestrator.py) `_page_action`, [`verification.py`](tracebrain/verification.py) |
 | Explainable results | Claim → edge ids → gate → highlighted, hop-numbered path → "Show Cypher" | [`faithfulness.py`](tracebrain/faithfulness.py), UI Evidence/Trace |
 
 ### Track 02: Agent Memory and Coordination
@@ -148,7 +148,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run-local.ps1      # add -Reset
 
 **Check it without an API key:**
 ```bash
-uv run pytest -q              # 64 tests against a real FalkorDB (they skip if it isn't running)
+uv run pytest -q              # 65 tests against a real FalkorDB (they skip if it isn't running)
 uv run python eval/run.py     # the results table above, no LLM calls
 ```
 
@@ -266,10 +266,12 @@ WITH p, length(p) AS len ORDER BY len LIMIT 1
 RETURN [n IN nodes(p) | n.name] AS services, [r IN relationships(p) | id(r)] AS edge_ids
 ```
 
-**Graph algorithms** (structural priors; FalkorDB's `algo.*` don't filter on edge properties, so they are time-agnostic):
+**Graph algorithms.** FalkorDB's `algo.*` can't filter on edge properties. In `suspects`, PageRank over all edges is a small structural prior. `page_priority` makes them time-aware instead: it copies the graph, deletes the edges not valid at `$t`, and runs the algorithms on the copy (cached per distinct as-of topology):
 ```cypher
 CALL algo.pageRank('Service', 'DEPENDS_ON') YIELD node, score RETURN node.name AS service, score
 CALL algo.betweenness({nodeLabels: ['Service'], relationshipTypes: ['DEPENDS_ON']}) YIELD node, score RETURN node.name, score
+// page_priority, on a GRAPH.COPY of the tenant graph, before the two calls above:
+MATCH ()-[r:DEPENDS_ON]->() WHERE NOT (r.valid_from <= $t AND r.valid_to > $t) DELETE r
 ```
 
 **Evidence gate:** resolve every cited edge id and check it against the claim.
@@ -308,7 +310,7 @@ CREATE (f)-[:HANDOFF {from_agent: $from_agent, to_agent: $to_agent, ts: $now}]->
 
 These were checked against a running server with [`scripts/capability_check.py`](scripts/capability_check.py); the output is in [`docs/falkordb_capabilities.md`](docs/falkordb_capabilities.md).
 - `shortestPath()` is only allowed in `WITH`/`RETURN`, and it **ignores edge properties**: at t=50 it returned a path through a dependency that didn't exist yet. So all time-critical paths use var-length + an `all()` as-of filter.
-- `algo.pageRank`, `algo.betweenness`, `algo.BFS`, `algo.WCC` and `algo.labelPropagation` all work, but none filter on edge properties, so they are used only as time-agnostic priors.
+- `algo.pageRank`, `algo.betweenness`, `algo.BFS`, `algo.WCC` and `algo.labelPropagation` all work, but none filter on edge properties. So they are either time-agnostic priors (`suspects`) or run on a time-sliced `Graph.copy()` (`page_priority`).
 - `ro_query` rejects writes, which enforces read-only agents for free.
 - `Graph.copy()` gives a cheap sandbox for "what if we roll this back?".
 
@@ -322,7 +324,8 @@ Server: [`tracebrain/tools/mcp_server.py`](tracebrain/tools/mcp_server.py). It r
 | `owners_of` | as-of `OWNS` + `MEMBER_OF` | Triage, Investigator |
 | `suspects` | as-of closure → deploys → authors, PageRank, lessons | Investigator |
 | `path_between` | as-of shortest path | Investigator |
-| `centrality` | `algo.pageRank`, `algo.betweenness` | Investigator |
+| `page_priority` | `algo.betweenness` + `algo.pageRank` on an as-of `Graph.copy`, over the blast radius, + as-of owners: **picks who is paged** | Triage |
+| `centrality` | `algo.pageRank`, `algo.betweenness` (all edges ever seen) | Investigator |
 | `write_finding` / `read_findings` | blackboard nodes | Triage / Investigator |
 | `recall_similar`, `recall_lessons`, `get_past_investigation` | memory subgraph | both |
 | `get_incident` | incident lookup | external clients |
@@ -335,7 +338,7 @@ All data is **synthetic**, from a seeded, deterministic generator ([`connectors/
 
 - **The rollback's "does the symptom clear?" answer is an oracle.** The sandbox part is real graph work (`Graph.copy`, mark rolled back, re-rank), but whether the symptom clears comes from the synthetic ground truth, labelled "simulated oracle" wherever it appears. It never re-ranks hypotheses and isn't part of the eval. A real deployment would revert in staging and watch metrics.
 - **Small, synthetic graph.** As-of vs time-blind never changes the blast radius in this dataset; the effect shows up in suspects and owners.
-- **Graph algorithms are time-agnostic priors** (PageRank is weight 0.2 of 7.0 in the score) because FalkorDB's `algo.*` can't filter on edge validity.
+- **In the suspect ranking, graph algorithms are a small time-agnostic prior** (PageRank is weight 0.2 of 7.0). Betweenness drives the page decision, and there it runs on the as-of graph, but in this small dataset the as-of and time-blind betweenness choose the same service in all but 1 of 26 incidents per tenant.
 - **The ranking is deterministic and the LLM reasons over it.** That's intentional, for reproducibility, but the eval measures the ranking, not the LLM's final pick.
 - The evidence gate's relevance check is a heuristic (a cited edge must touch a node named in the claim). The Curator is deterministic code triggered by a human review, not an LLM agent.
 
@@ -358,7 +361,7 @@ tracebrain/
 eval/run.py         deterministic evaluation -> eval/results.json
 ui/                 React + Vite + React Flow console
 scripts/            run-local.ps1, capability_check.py, export_cypher_for_ui.py
-tests/              64 tests against a real FalkorDB
+tests/              65 tests against a real FalkorDB
 ```
 
 ## AI assistance disclosure

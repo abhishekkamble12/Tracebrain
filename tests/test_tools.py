@@ -7,7 +7,7 @@ import anyio
 import pytest
 from mcp import Client
 
-from tracebrain import schema
+from tracebrain import db, schema
 from tracebrain.connectors.synthetic import SyntheticConnector
 from tracebrain.ingest import ingest
 from tracebrain.tools import impl, mcp_server
@@ -109,3 +109,23 @@ def test_mcp_errors_are_returned_not_raised(world):
     ctx, _, _ = first_incident(world, "timeout")
     out = _call("blast_radius", {"service": "nope"}, {mcp_server.META_TENANT: ctx.tenant, mcp_server.META_T: ctx.t})
     assert "unknown service" in out["error"]
+
+
+def test_page_priority_ranks_blast_radius_by_asof_betweenness(world):
+    """An algorithm, not the LLM, picks who is paged: betweenness on a time-sliced copy of the graph."""
+    tenant, w = world["payments"]
+    iid, truth = next((k, v) for k, v in sorted(w.truth.items()) if v["service"] == "payment")
+    ctx = ToolCtx(tenant, truth["ts"])
+    out = impl.page_priority(ctx, "payment")
+    ranked = [r["service"] for r in out["ranking"]]
+    assert sorted(ranked) == sorted(["payment", *truth["blast_radius"]])
+    assert [r["betweenness"] for r in out["ranking"]] == sorted((r["betweenness"] for r in out["ranking"]),
+                                                                reverse=True)
+    # payment is a leaf; checkout, which calls it, is the chokepoint: its owner then is paged.
+    assert out["page"]["service"] == "checkout" and out["page"]["service"] != "payment"
+    (owner,) = [o for o in impl.owners_of(ctx, ["checkout"])["owners"]]
+    assert out["page"]["team"] == owner["team"] and owner["edge_id"] in out["page"]["edge_ids"]
+    action = impl.page_action(out)
+    assert action["target"] == owner["team"] and "betweenness 1.00" in action["reason"]
+    # The time-sliced copy is thrown away; the live graph keeps every edge.
+    assert not [g for g in db.client().list_graphs() if "__asof_" in g]

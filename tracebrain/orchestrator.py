@@ -25,10 +25,10 @@ from tracebrain.tools import impl, mcp_server
 from tracebrain.tools.impl import ToolCtx
 
 # get_incident stays on the MCP server for external clients; the brief already carries the incident.
-TRIAGE_TOOLS = {"blast_radius", "owners_of", "recall_similar", "write_finding"}
+TRIAGE_TOOLS = {"blast_radius", "page_priority", "owners_of", "recall_similar", "write_finding"}
 INVESTIGATOR_TOOLS = {"read_findings", "suspects", "path_between", "owners_of", "centrality",
                       "recall_lessons", "recall_similar", "get_past_investigation"}
-REQUIRED_FINDINGS = {"blast_radius", "owners"}
+REQUIRED_FINDINGS = {"blast_radius", "owners", "page_priority"}
 
 log = logging.getLogger(__name__)
 EventHook = Callable[[str, dict], Any]
@@ -190,7 +190,19 @@ def _ensure_findings(inv: Investigation, ctx: ToolCtx) -> list[str]:
         episodic.write_finding(inv.tenant, inv.inv_id, "orchestrator", "owners",
                                impl.owners_of(ctx, [ctx.service, *affected]))
         added.append("owners")
+    if "page_priority" not in kinds:
+        episodic.write_finding(inv.tenant, inv.inv_id, "orchestrator", "page_priority",
+                               impl.page_priority(ctx, ctx.service))
+        added.append("page_priority")
     return added
+
+
+def _page_action(inv: Investigation, ctx: ToolCtx) -> dict | None:
+    """The page comes from the page_priority algorithm (as recorded on the blackboard), never the LLM.
+    It is recomputed if the finding's payload isn't a page_priority result (e.g. the LLM summarised it)."""
+    payload = next((f["payload"] for f in episodic.findings(inv.tenant, inv.inv_id) if f["kind"] == "page_priority"
+                    and isinstance(f["payload"], dict) and "ranking" in f["payload"]), None)
+    return impl.page_action(payload or impl.page_priority(ctx, ctx.service))
 
 
 async def _investigate(inv: Investigation, ctx: ToolCtx, brief: str, client: Client, chat_fn) -> None:
@@ -210,7 +222,7 @@ async def _investigate(inv: Investigation, ctx: ToolCtx, brief: str, client: Cli
     if not rows:  # nothing deployed on the as-of dependency closure in the window
         final.update(abstain=True, hypotheses=[],
                      abstain_reason=final.get("abstain_reason") or "no suspect deploys in the look-back window",
-                     actions=[a for a in final.get("actions") or [] if a.get("kind") == "page"])
+                     actions=[])
     if investigator.stopped != "final":
         final.setdefault("abstain", not final["hypotheses"])
         final.setdefault("abstain_reason", f"investigator stopped: {investigator.stopped}")
@@ -221,7 +233,12 @@ async def _investigate(inv: Investigation, ctx: ToolCtx, brief: str, client: Cli
             for h in graded["hypotheses"] if h.get("deploy_id") in inv.seen_deploys]
     episodic.store_hypotheses(inv.tenant, inv.inv_id, hyps)
     actions = [a for a in final.get("actions") or []
-               if a.get("kind") in faithfulness.ACTION_KINDS and a.get("target")]
+               if a.get("kind") in faithfulness.ACTION_KINDS - {"page"} and a.get("target")]
+    if final.get("abstain"):
+        actions = []
+    page = _page_action(inv, ctx)
+    if page:
+        actions.append(page)
     episodic.store_actions(inv.tenant, inv.inv_id, actions)
     inv.graded = graded
     inv.move("HYPOTHESIZED")

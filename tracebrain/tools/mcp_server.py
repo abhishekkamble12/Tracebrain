@@ -94,6 +94,14 @@ def centrality(ctx: Context) -> dict:
 
 
 @server.tool()
+def page_priority(service: str, ctx: Context) -> dict:
+    """Who to page: the failing service and everything that calls it at incident time, ranked by
+    betweenness centrality computed on the graph as of the incident (FalkorDB algo.betweenness on a
+    time-sliced copy), each with its owning team then. `page` is the team to page."""
+    return _run(impl.page_priority, ctx, service)
+
+
+@server.tool()
 def write_finding(kind: str, payload: dict, ctx: Context) -> dict:
     """Record a finding on this investigation's shared blackboard so the next agent can use it.
     kind: blast_radius | owners | similar_incidents | note. Include the edge_ids that support it."""

@@ -141,6 +141,16 @@ BETWEENNESS = """
 CALL algo.betweenness({nodeLabels: ['Service'], relationshipTypes: ['DEPENDS_ON']}) YIELD node, score
 RETURN node.name AS service, score ORDER BY score DESC"""
 
+# Time-slicing a sandbox copy so the native algorithms run on the graph AS OF $t (they can't filter edges).
+ASOF_DEPENDENCY_IDS = f"""
+MATCH ()-[r:DEPENDS_ON]->() WHERE {AS_OF}
+RETURN id(r) AS id, id(startNode(r)) AS a, id(endNode(r)) AS b ORDER BY id"""
+
+DROP_EDGES_NOT_AS_OF = """
+MATCH ()-[r:DEPENDS_ON]->() WHERE NOT (r.valid_from <= $t AND r.valid_to > $t)
+DELETE r
+RETURN count(r) AS dropped"""
+
 # Faithfulness checker: resolve cited edge ids to (type, src, dst).
 EDGE_LOOKUP = """
 MATCH (a)-[r]->(b) WHERE id(r) IN $ids

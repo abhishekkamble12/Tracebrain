@@ -6,6 +6,7 @@ anything derived from graph paths returns `edge_ids` so claims can cite exact ed
 Bad input raises ToolError with a message written for the LLM to recover from.
 """
 
+import threading
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -13,7 +14,7 @@ from tracebrain import db, queries, scoring
 from tracebrain.config import DEFAULT_WINDOW_S
 from tracebrain.memory import episodic, procedural
 
-FINDING_KINDS = {"blast_radius", "owners", "similar_incidents", "note"}
+FINDING_KINDS = {"blast_radius", "owners", "page_priority", "similar_incidents", "note"}
 
 
 @dataclass(frozen=True)
@@ -156,6 +157,64 @@ def get_past_investigation(ctx: ToolCtx, incident_id: str) -> dict:
             "tool_sequence": [s["tool"] for s in episodic.steps(ctx.tenant, inv)],
             "hypotheses": [{"rank": h["rank"], "deploy_id": h["deploy_id"], "likely_cause": h["likely_cause"],
                             "verified_claims": [c["text"] for c in h["claims"] if c["verified"]]} for h in hyps]}
+
+
+_centrality_lock = threading.Lock()
+_centrality_cache: dict[tuple[str, tuple], tuple[dict[str, float], dict[str, float]]] = {}
+
+
+def _asof_centrality(tenant: str, t: int) -> tuple[dict[str, float], dict[str, float]]:
+    """Native algo.betweenness / algo.pageRank on the dependency graph AS OF t. The algorithms can't
+    filter edges by time, so they run on a sandbox copy with every DEPENDS_ON not valid at t deleted.
+    Cached per distinct as-of topology: incidents that see the same edges share one computation."""
+    topology = tuple((r["id"], r["a"], r["b"]) for r in db.read(tenant, queries.ASOF_DEPENDENCY_IDS, {"t": t}))
+    with _centrality_lock:  # single-flight: concurrent investigations wait for one copy, not N
+        if (tenant, topology) not in _centrality_cache:
+            with db.sandbox(tenant, "asof") as box:
+                db.write(box, queries.DROP_EDGES_NOT_AS_OF, {"t": t})
+                between = {r["service"]: r["score"] for r in db.read(box, queries.BETWEENNESS)}
+                pagerank = {r["service"]: r["score"] for r in db.read(box, queries.PAGERANK)}
+            _centrality_cache[(tenant, topology)] = between, pagerank
+        return _centrality_cache[(tenant, topology)]
+
+
+def page_priority(ctx: ToolCtx, service: str) -> dict:
+    """Who to page: the alerted service and everything that calls it (as of t), ranked by betweenness
+    on the as-of graph. The top service is the chokepoint most traffic flows through, so its owning
+    team (as of t) is paged."""
+    br = blast_radius(ctx, service)
+    hops = {service: 0, **{a["service"]: a["hops"] for a in br["affected"]}}
+    path_edges = {service: [], **{a["service"]: a["edge_ids"] for a in br["affected"]}}
+    between, pagerank = _asof_centrality(ctx.tenant, ctx.t)
+    top_b, top_p = max(between.values(), default=0) or 1.0, max(pagerank.values(), default=0) or 1.0
+    owners = {o["service"]: o for o in owners_of(ctx, list(hops))["owners"]}
+    ranking = sorted(({
+        "service": s, "hops": h,
+        "betweenness": round(between.get(s, 0.0) / top_b, 3), "pagerank": round(pagerank.get(s, 0.0) / top_p, 3),
+        "team": owners.get(s, {}).get("team"), "people": owners.get(s, {}).get("people", []),
+        "edge_ids": path_edges[s] + ([owners[s]["edge_id"]] if s in owners else []),
+    } for s, h in hops.items()), key=lambda r: (-r["betweenness"], -r["pagerank"], r["hops"], r["service"]))
+    for i, r in enumerate(ranking, 1):
+        r["rank"] = i
+    page = next((r for r in ranking if r["team"]), None)
+    return {"alerted_service": service, "as_of": ctx.t, "ranking": ranking, "page": page,
+            "edge_ids": sorted({e for r in ranking for e in r["edge_ids"]}),
+            "method": "algo.betweenness and algo.pageRank on a copy of the graph with only the DEPENDS_ON "
+                      "edges valid at incident time; owner = OWNS edge valid at incident time"}
+
+
+def page_action(result: dict) -> dict | None:
+    """The page action an investigation proposes, chosen by page_priority (not by the LLM)."""
+    top, ranking = result.get("page"), result.get("ranking") or []
+    if not top:
+        return None
+    people = ", ".join(f"@{p}" for p in top["people"]) or "no members on record"
+    where = ("the alerted service" if top["hops"] == 0
+             else f"{top['hops']} hop(s) upstream of {result['alerted_service']}")
+    return {"kind": "page", "target": top["team"],
+            "reason": f"{top['team']} owns {top['service']} ({where}), the biggest chokepoint in the blast radius: "
+                      f"betweenness {top['betweenness']:.2f}, rank 1 of {len(ranking)} on the graph as of the "
+                      f"incident. On the team: {people}."}
 
 
 def centrality(ctx: ToolCtx) -> dict:

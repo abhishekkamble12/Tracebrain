@@ -1,7 +1,11 @@
 """FalkorDB access. One graph per tenant; agent-reachable reads go through ro_query."""
 
+import threading
+import time
+import uuid
+from contextlib import contextmanager
 from functools import lru_cache
-from typing import Any
+from typing import Any, Iterator
 
 from falkordb import FalkorDB, Graph
 from redis.exceptions import ResponseError
@@ -40,6 +44,29 @@ def read(tenant: str, query: str, params: dict | None = None) -> list[dict[str, 
 def write(tenant: str, query: str, params: dict | None = None) -> list[dict[str, Any]]:
     """Write query. Only memory modules, ingestion and the review endpoint may call this."""
     return rows(graph_for(tenant).query(query, params))
+
+
+_copy_lock = threading.Lock()  # GRAPH.COPY forks the server, and concurrent forks fail: one at a time
+
+
+@contextmanager
+def sandbox(tenant: str, tag: str = "sandbox") -> Iterator[str]:
+    """A throwaway copy of the tenant's graph (GRAPH.COPY). Yields a tenant name usable with read/write;
+    the copy is deleted on exit. The live graph is never touched."""
+    suffix = f"__{tag}_{uuid.uuid4().hex[:6]}"
+    for attempt in range(4):  # another process (or a BGSAVE) may still be forking: retry with backoff
+        try:
+            with _copy_lock:
+                graph_for(tenant).copy(graph_name(tenant + suffix))
+            break
+        except Exception:
+            if attempt == 3:
+                raise
+            time.sleep(0.5 * (attempt + 1))
+    try:
+        yield tenant + suffix
+    finally:
+        graph_for(tenant + suffix).delete()
 
 
 class NotFalkorDB(RuntimeError):

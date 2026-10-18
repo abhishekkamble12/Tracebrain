@@ -48,6 +48,8 @@ class Policy:
             plan = [("blast_radius", {"service": self.service}), ("owners_of", {"services": [self.service]}),
                     ("write_finding", {"kind": "blast_radius", "payload": res[0] if res else {}}),
                     ("write_finding", {"kind": "owners", "payload": res[1] if len(res) > 1 else {}}),
+                    ("page_priority", {"service": self.service}),
+                    ("write_finding", {"kind": "page_priority", "payload": res[-1] if len(res) > 4 else {}}),
                     ("finish_triage", {"summary": "triage done"})]
             return result(*plan[min(len(done), len(plan) - 1)])
 
@@ -57,7 +59,7 @@ class Policy:
         sus = next(r for r in reversed(res) if isinstance(r, dict) and "suspects" in r)["suspects"]
         if not sus:
             return result("submit_hypotheses", {"hypotheses": [], "abstain": True, "abstain_reason": "no deploys",
-                                                "actions": [{"kind": "page", "target": "Checkout"}]})
+                                                "actions": [{"kind": "page", "target": "SomeoneTheLLMPicked"}]})
         target = sus[0] if self.pick == "top" else next(s for s in sus if s["deploy"] == self.pick)
         deployed_to = target["edge_ids"][-1]
         claims = [{"text": f"{target['deploy']} was deployed to {target['service']}", "edge_ids": [deployed_to]}]
@@ -105,11 +107,11 @@ def test_full_pipeline_persists_everything(world):
     assert [s["tool"] for s in full["steps"]][:4] == ["blast_radius", "owners_of", "write_finding", "write_finding"]
     assert db.read(tenant, "MATCH (:Investigation {id:$id})-[:HAS_STEP]->(a)-[:NEXT]->(b) RETURN count(*) AS n",
                    {"id": inv_id})[0]["n"] == len(full["steps"]) - 1
-    assert {f["kind"] for f in full["findings"]} == {"blast_radius", "owners"}
+    assert {f["kind"] for f in full["findings"]} == {"blast_radius", "owners", "page_priority"}
     assert all(f["handed_to"] == ["investigator"] for f in full["findings"])
     (h,) = full["hypotheses"]
     assert h["deploy_id"] == truth["culprit_deploy"] and all(c["verified"] for c in h["claims"])
-    assert full["actions"][0]["kind"] == "rollback_proposal"
+    assert [a["kind"] for a in full["actions"]] == ["rollback_proposal", "page"]
     states = [d["state"] for k, d in events if k == "state"]
     assert states == ["TRIAGED", "HYPOTHESIZED", "AWAITING_REVIEW"]
     stats = db.read(tenant, "MATCH (v:Investigation {id:$id}) RETURN v.faithfulness AS f, v.tool_calls AS n",
@@ -151,7 +153,8 @@ def test_abstains_when_no_deploy_is_plausible(world):
     inv_id = investigate(tenant, iid, Policy(truth["service"]))
     full = episodic.full(tenant, inv_id)
     assert full["outcome"] == "abstained" and full["hypotheses"] == []
-    assert all(a["kind"] == "page" for a in full["actions"])
+    (page,) = full["actions"]  # the LLM's page target is ignored: the algorithm picks who is paged
+    assert page["kind"] == "page" and page["target"] != "SomeoneTheLLMPicked" and "betweenness" in page["reason"]
 
 
 def test_confirm_teaches_and_memory_changes_the_next_ranking(world):

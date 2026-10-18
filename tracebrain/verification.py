@@ -17,7 +17,6 @@ and the result never re-ranks hypotheses or feeds the eval, so the oracle can't 
 
 import json
 import time
-import uuid
 from pathlib import Path
 from typing import Protocol
 
@@ -62,22 +61,11 @@ def verify_rollback(tenant: str, incident_id: str, hypothesis_id: str, deploy_id
                     env: Environment) -> dict:
     from tracebrain.tools import impl  # tools import memory modules; keep this module light
 
-    suffix = f"__sandbox_{uuid.uuid4().hex[:6]}"
-    sandbox = f"{db.graph_name(tenant)}{suffix}"
-    for attempt in range(3):  # GRAPH.COPY forks the server; a concurrent fork can fail transiently
-        try:
-            db.graph_for(tenant).copy(sandbox)
-            break
-        except Exception:
-            if attempt == 2:
-                raise
-            time.sleep(0.5 * (attempt + 1))
-    try:
-        db.write(tenant + suffix, "MATCH (d:Deploy {id: $id}) SET d.rolled_back = true", {"id": deploy_id})
-        inc = impl.get_incident(impl.ToolCtx(tenant + suffix, 0), incident_id)
-        after = impl.suspects(impl.ToolCtx(tenant + suffix, inc["ts"], memory_enabled=False), inc["service"])
-    finally:
-        db.client().select_graph(sandbox).delete()
+    with db.sandbox(tenant) as box:
+        sandbox = db.graph_name(box)
+        db.write(box, "MATCH (d:Deploy {id: $id}) SET d.rolled_back = true", {"id": deploy_id})
+        inc = impl.get_incident(impl.ToolCtx(box, 0), incident_id)
+        after = impl.suspects(impl.ToolCtx(box, inc["ts"], memory_enabled=False), inc["service"])
     remaining = after["suspects"]
     counterfactual = {"next_suspect": remaining[0]["deploy"] if remaining else None,
                       "next_suspect_service": remaining[0]["service"] if remaining else None,
